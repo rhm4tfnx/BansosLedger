@@ -131,3 +131,4 @@ dokumen.
                   ┌───────────┬───────┼───────────┐
                   │           │       │           │
              Validator 1 Validator 2 Validator 3 Validator 4
+```

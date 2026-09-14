@@ -1,1 +1,0 @@
-hal important untuk bagian typescript
