@@ -1,15 +1,11 @@
-"use client";
+import TestWarna from "../components/ui/TestWarna/TestWarna";
 
-import { useState } from "react";
-
-export default function Home() {
-  const [count, setCount] = useState(0);
-
+const Page = () => {
   return (
     <div>
-      <h1>{count}</h1>
-      <button onClick={() => setCount((prev) => prev + 1)}>add</button>
-      <button onClick={() => setCount((prev) => prev - 1)}>decrease</button>
+      <TestWarna />
     </div>
   );
-}
+};
+
+export default Page;
