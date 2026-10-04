@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Mona_Sans, Space_Mono } from "next/font/google";
 
@@ -17,9 +17,11 @@ const spaceMono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BansosLedger Kelurahan Takkalasi",
-  description: "Informasi Bantuan Sosial",
+  title: "BansosLedger — Transparansi Bantuan Sosial Takkalasi",
+  description: "Kenali BansosLedger, sistem transparansi penyaluran bantuan sosial berbasis blockchain untuk Kelurahan Takkalasi. Terbuka, terlacak, dan dapat dipertanggungjawabkan.",
 };
+
+export const viewport: Viewport = { themeColor: "#e9edec" };
 
 export default function RootLayout({
   children,

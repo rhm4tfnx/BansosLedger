@@ -1,11 +1,16 @@
-import TestWarna from "../components/ui/TestWarna/TestWarna";
+import { Benefits, Footer, Header, Hero, Statistics } from "../components/landing/landing-page";
 
-const Page = () => {
+export default function Page() {
   return (
-    <div>
-      <TestWarna />
+    <div className="page-frame" id="beranda">
+      <a href="#tentang" className="skip-link">Lewati ke konten utama</a>
+      <Header />
+      <main>
+        <Hero />
+        <Statistics />
+        <Benefits />
+      </main>
+      <Footer />
     </div>
   );
-};
-
-export default Page;
+}
