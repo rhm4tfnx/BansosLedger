@@ -31,7 +31,7 @@ export default function RootLayout({
       lang="id"
       className={`${monaSans.variable} ${spaceMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
 }
