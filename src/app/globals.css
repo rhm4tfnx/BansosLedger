@@ -24,10 +24,17 @@
   --color-warning: #ffe777;
   --color-danger: #f73678;
   --color-info: #168ffb;
+
+  /* font section */
+  --font-sans:
+    var(--font-mona-sans), -apple-system, BlinkMacSystemFont, "Roboto",
+    "Helvetica Neue", "Nanum Gothic", sans-serif;
+
+  --font-mono: var(--font-mono-space), monospace;
 }
 
 /* @media (prefers-color-scheme: dark) {
-  @theme inline {
+  @theme inline { 
     --color-background: #0a0a0a;
     --color-surface: #1a1a1a;
     --color-foreground: #ededed;
@@ -37,6 +44,12 @@
 
 @layer base {
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+  }
+
+  code,
+  pre,
+  kbd {
+    @apply font-mono;
   }
 }
