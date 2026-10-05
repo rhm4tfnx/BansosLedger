@@ -56,7 +56,7 @@ export default function Navbar({
             className={`flex shrink-0 items-center justify-center border-secondary px-4 min-[641px]:border-r ${focusStyle}`}
           >
             {logo ?? (
-              <span className="flex h-10 w-[100px] items-center justify-center overflow-hidden sm:w-[136px]">
+              <span className="flex h-10 w-25 items-center justify-center overflow-hidden sm:w-34">
                 <img
                   src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo%20bansos%20gw-6X5obTlrPSLcAeQOedW9iXOgP5TfrS.png"
                   alt="BansosLedger"
