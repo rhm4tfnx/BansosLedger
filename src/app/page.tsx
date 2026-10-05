@@ -1,3 +1,5 @@
+"use client";
+
 import TestWarna from "../components/ui/TestWarna/TestWarna";
 
 const Page = () => {
