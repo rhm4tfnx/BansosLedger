@@ -1,55 +1,64 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* Light Mode (default) */
   --color-background: #e9edec;
   --color-surface: #ffffff;
   --color-foreground: #000000;
   --color-muted-foreground: #7c9098;
-  --color-border: #e1e6e4;
+  --color-border: #d2d9d4;
+  --radius-panel: 0px;
+  --radius-control: 7px;
+  --radius-label: 3px;
   --color-input: #8c959f;
-
-  /* Primary */
   --color-primary: #08872b;
   --color-primary-hover: #0d6731;
   --color-primary-foreground: #08872b;
-
-  /* Secondary */
   --color-secondary: #d2d9d4;
   --color-secondary-hover: #ffffff;
   --color-secondary-foreground: #1b0000;
-
-  /* Status */
   --color-success: #5fed83;
   --color-warning: #ffe777;
   --color-danger: #f73678;
   --color-info: #168ffb;
-
-  /* font section */
+  --color-body-copy: #53646a;
   --font-sans:
     var(--font-mona-sans), -apple-system, BlinkMacSystemFont, "Roboto",
     "Helvetica Neue", "Nanum Gothic", sans-serif;
-
   --font-mono: var(--font-mono-space), monospace;
 }
 
-/* @media (prefers-color-scheme: dark) {
-  @theme inline { 
-    --color-background: #0a0a0a;
-    --color-surface: #1a1a1a;
-    --color-foreground: #ededed;
-    --color-muted-foreground: #a0a0a0;
-  }
-} */
-
 @layer base {
-  body {
-    @apply bg-background text-foreground font-sans;
+  * {
+    @apply border-border;
   }
-
+  html {
+    @apply scroll-smooth scroll-pt-8 motion-reduce:scroll-auto;
+  }
+  body {
+    @apply m-0 bg-background text-foreground font-sans;
+  }
   code,
   pre,
   kbd {
     @apply font-mono;
+  }
+  a,
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+  a:focus-visible,
+  button:focus-visible {
+    @apply outline-3 outline-primary outline-offset-[5px];
+  }
+  ::selection {
+    @apply bg-primary text-white;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
   }
 }

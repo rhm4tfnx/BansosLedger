@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Light Mode (default) */
+  --color-background: #e9edec;
+  --color-surface: #ffffff;
+  --color-foreground: #000000;
+  --color-muted-foreground: #7c9098;
+  --color-border: #e1e6e4;
+  --color-input: #8c959f;
+
+  /* Primary */
+  --color-primary: #08872b;
+  --color-primary-hover: #0d6731;
+  --color-primary-foreground: #08872b;
+
+  /* Secondary */
+  --color-secondary: #d2d9d4;
+  --color-secondary-hover: #ffffff;
+  --color-secondary-foreground: #1b0000;
+
+  /* Status */
+  --color-success: #5fed83;
+  --color-warning: #ffe777;
+  --color-danger: #f73678;
+  --color-info: #168ffb;
+
+  /* font section */
+  --font-sans:
+    var(--font-mona-sans), -apple-system, BlinkMacSystemFont, "Roboto",
+    "Helvetica Neue", "Nanum Gothic", sans-serif;
+
+  --font-mono: var(--font-mono-space), monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  code,
+  pre,
+  kbd {
+    @apply font-mono;
+  }
+}
