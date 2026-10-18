@@ -1,0 +1,213 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@theme inline {
+  --container-7xl: 100rem;
+  --color-background: #e9edec;
+  --color-surface: #ffffff;
+  --color-foreground: #000000;
+  --color-muted-foreground: #7c9098;
+  --color-border: #d2d9d4;
+  --radius-panel: 0px;
+  --radius-control: 7px;
+  --radius-label: 3px;
+  --color-input: #8c959f;
+  --color-primary: #08872b;
+  --color-primary-hover: #0d6731;
+  --color-primary-foreground: #08872b;
+  --color-secondary: #d2d9d4;
+  --color-secondary-hover: #ffffff;
+  --color-secondary-foreground: #1b0000;
+  --color-success: #5fed83;
+  --color-warning: #ffe777;
+  --color-danger: #f73678;
+  --color-info: #168ffb;
+  --color-body-copy: #53646a;
+  --font-sans:
+    var(--font-mona-sans), -apple-system, BlinkMacSystemFont, 'Roboto', 'Helvetica Neue',
+    'Nanum Gothic', sans-serif;
+  --font-mono: var(--font-mono-space), monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    @apply scroll-smooth scroll-pt-8 motion-reduce:scroll-auto;
+  }
+  body {
+    @apply m-0 bg-background text-foreground font-sans;
+  }
+  code,
+  pre,
+  kbd {
+    @apply font-mono;
+  }
+  a,
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+  a:focus-visible,
+  button:focus-visible {
+    @apply outline-3 outline-primary outline-offset-[5px];
+  }
+  ::selection {
+    @apply bg-primary text-white;
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 0.45rem color-mix(in srgb, var(--color-primary) 0%, transparent);
+  }
+}
+
+@keyframes progress-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+#beranda,
+#mengapa-bansosledger,
+#fitur,
+#alur-sistem,
+#faq {
+  scroll-margin-top: 6rem;
+}
+
+.page-transition {
+  animation: page-enter 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  main article:hover,
+  main [data-reveal]:hover {
+    translate: 0 -4px;
+    box-shadow:
+      0 12px 32px rgb(8 135 43 / 14%),
+      0 0 0 1px rgb(8 135 43 / 16%);
+  }
+}
+
+main article,
+main [data-reveal] {
+  transition:
+    translate 280ms ease,
+    box-shadow 280ms ease,
+    border-color 280ms ease;
+}
+
+main article,
+main details,
+main [role='progressbar'] {
+  transition:
+    box-shadow 240ms ease,
+    border-color 240ms ease,
+    transform 240ms ease;
+}
+
+main article:hover,
+main details:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0.5rem 1.5rem color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+main[data-transparency] article,
+main[data-transparency] [data-reveal] {
+  translate: none;
+  transition:
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+main[data-transparency] article:hover,
+main[data-transparency] [data-reveal]:hover {
+  translate: none;
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  main[data-transparency] article:hover {
+    border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
+    box-shadow: 0 2px 8px rgb(0 0 0 / 3%);
+  }
+}
+
+main a.bg-primary,
+main button.bg-primary,
+header a.bg-primary,
+header button.bg-primary {
+  transition:
+    box-shadow 240ms ease,
+    background-color 240ms ease,
+    transform 240ms ease;
+}
+
+main a.bg-primary:hover,
+main button.bg-primary:hover,
+header a.bg-primary:hover,
+header button.bg-primary:hover {
+  box-shadow: 0 0.4rem 1.25rem color-mix(in srgb, var(--color-primary) 28%, transparent);
+  transform: translateY(-1px);
+}
+
+[role='progressbar'] > div {
+  background-image: linear-gradient(
+    110deg,
+    transparent 20%,
+    color-mix(in srgb, white 28%, transparent) 45%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: progress-shimmer 2.4s linear infinite;
+}
+
+[aria-label*='Jaringan'],
+[aria-label*='node'],
+.status-online,
+.node-indicator {
+  animation: node-pulse 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition: none !important;
+  }
+}
