@@ -2,16 +2,15 @@
 
 import { useState, type ReactNode } from 'react'
 import { useClipboard } from '@/hooks/use-clipboard'
+import { formatHexAddress } from '@/lib/utils'
 import Link from 'next/link'
 import { ArrowLeft, Copy, Wallet } from 'lucide-react'
-import {
-  addressTransactions,
-  contractAddress,
-  type ExplorerAddress,
-} from '@/lib/explorer-addresses'
+import { addressTransactions } from '@/mocks/explorer-queries'
+import { contractAddress } from '@/constants/explorer-addresses'
+import type { ExplorerAddress } from '@/types/explorer'
 
 const panel = 'rounded-control border bg-white p-5 sm:p-6'
-const short = (s: string) => `${s.slice(0, 10)}…${s.slice(-6)}`
+const short = formatHexAddress
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-2 border-b py-4 last:border-0 sm:grid-cols-[240px_1fr]">

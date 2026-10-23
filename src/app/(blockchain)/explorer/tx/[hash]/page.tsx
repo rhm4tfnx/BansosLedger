@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { transactions } from '@/constants/explorer-data'
+import { transactions } from '@/mocks/explorer-data'
 import { TransactionDetails } from '@/components/features/explorer/transaction-details'
-import { DistributionExplorer } from '@/components/features/dashboard/disbursement-detail'
+import { DistributionExplorer } from '@/components/features/dashboard/disbursements/disbursement-detail'
 
 export const metadata: Metadata = {
   title: 'Detail Transaksi | BansosLedger',

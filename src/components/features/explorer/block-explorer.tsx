@@ -7,7 +7,8 @@ import { Box, ArrowUpRight, Search, ShieldCheck, Network, FileText, ArrowLeft } 
 import { Area, AreaChart, XAxis } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { CountUp } from '@/components/ui/count-up'
-import { wallets, walletFor, addresses } from '@/lib/explorer-addresses'
+import { wallets, addresses } from '@/constants/explorer-addresses'
+import { walletFor } from '@/mocks/explorer-queries'
 
 const validators = [
   'Kelurahan Takkalasi',

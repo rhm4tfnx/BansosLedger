@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { addresses } from '@/lib/explorer-addresses'
+import { addresses } from '@/constants/explorer-addresses'
 import { AddressDetails } from '@/components/features/explorer/address-details'
 
 export const metadata = {

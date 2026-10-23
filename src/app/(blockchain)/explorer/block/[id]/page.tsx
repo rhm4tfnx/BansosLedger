@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { blocks } from '@/constants/explorer-data'
+import { blocks } from '@/mocks/explorer-data'
 import { BlockDetails } from '@/components/features/explorer/block-details'
 import { ScrollReveal } from '@/components/ui/scroll-reveal'
 

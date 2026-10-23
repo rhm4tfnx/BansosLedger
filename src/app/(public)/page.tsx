@@ -1,4 +1,5 @@
-import { Hero } from '@/components/features/landing/hero'
+import { LandingHero } from '@/components/features/landing/landing-hero'
+import { LandingStatistics } from '@/components/features/landing/landing-details'
 import { SiteHeader } from '@/components/features/navigation/site-header'
 import { SiteFooter } from '@/components/features/navigation/site-footer'
 import { LandingFeatures } from '@/components/features/landing/landing-features'
@@ -15,7 +16,8 @@ export default function Page() {
       </a>
       <SiteHeader />
       <main id="main">
-        <Hero />
+        <LandingHero />
+        <LandingStatistics />
         <WhyBansosLedger />
         <LandingFeatures />
         <SystemFlow />

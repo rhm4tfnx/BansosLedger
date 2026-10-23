@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, CheckCircle2, Copy } from 'lucide-react'
-import { transactions } from '@/constants/explorer-data'
+import { transactions } from '@/mocks/explorer-data'
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (

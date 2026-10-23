@@ -1,4 +1,4 @@
-import { blocks, validators } from '@/constants/explorer-data'
+import { blocks, validators } from '@/mocks/explorer-data'
 import type { ExplorerAddress } from '@/types/explorer'
 
 export const contractAddress = `0x${'9abcdef0'.repeat(5)}`

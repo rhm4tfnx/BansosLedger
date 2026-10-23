@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react'
-import { blocks, transactions, validators, blockHash } from '@/constants/explorer-data'
+import { blocks, transactions, validators, blockHash } from '@/mocks/explorer-data'
 
 const tabs = [
   ['overview', 'Overview'],
