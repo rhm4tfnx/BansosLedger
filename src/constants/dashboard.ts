@@ -1,0 +1,85 @@
+export const monthlyDistribution = [
+  { month: 'Jan', pkh: 0.55, blt: 0.31, other: 0.24 },
+  { month: 'Feb', pkh: 0.68, blt: 0.38, other: 0.3 },
+  { month: 'Mar', pkh: 0.87, blt: 0.49, other: 0.38 },
+  { month: 'Apr', pkh: 0.78, blt: 0.44, other: 0.35 },
+  { month: 'Mei', pkh: 0.72, blt: 0.4, other: 0.32 },
+  { month: 'Jun', pkh: 0.97, blt: 0.55, other: 0.43 },
+  { month: 'Jul', pkh: 0.83, blt: 0.46, other: 0.37 },
+  { month: 'Agu', pkh: 0.9, blt: 0.51, other: 0.4 },
+  { month: 'Sep', pkh: 1.02, blt: 0.57, other: 0.45 },
+  { month: 'Okt', pkh: 0.92, blt: 0.52, other: 0.41 },
+]
+export const programs = [
+  { name: 'PKH & Sembako Terpadu', value: 42, amount: '7,75', fill: 'var(--chart-1)' },
+  { name: 'BLT Pangan & Desa', value: 28, amount: '5,16', fill: 'var(--chart-2)' },
+  { name: 'Beasiswa Pendidikan Daerah', value: 18, amount: '3,32', fill: 'var(--chart-3)' },
+  { name: 'Hibah UMKM & Tani', value: 12, amount: '2,22', fill: 'var(--chart-4)' },
+]
+export const rejectedTransactions = [
+  {
+    hash: '0x8a91…3f12',
+    name: 'Siti Aminah',
+    id: '3201••••0042',
+    program: 'PKH Tahap IV',
+    category: 'Duplikat',
+    reason: 'Penerima sudah menerima bantuan pada periode ini.',
+    block: '1.482.908',
+  },
+  {
+    hash: '0x3c7e…90ab',
+    name: 'Budi Santoso',
+    id: '3204••••1189',
+    program: 'BLT Pangan',
+    category: 'Nominal salah',
+    reason: 'Nominal melebihi batas maksimum penyaluran.',
+    block: '1.482.891',
+  },
+  {
+    hash: '0xf120…77c4',
+    name: 'Wallet tidak dikenal',
+    id: '0x99E0…dead',
+    program: 'Hibah UMKM',
+    category: 'Wallet tak berwenang',
+    reason: 'Wallet tidak memiliki otorisasi OPERATOR_ROLE.',
+    block: '1.482.840',
+  },
+  {
+    hash: '0x7d44…19e8',
+    name: 'Koperasi Tani Makmur',
+    id: '0x12a9…440c',
+    program: 'Subsidi Pupuk',
+    category: 'Duplikat',
+    reason: 'Batch transaksi telah disalurkan sebelumnya.',
+    block: '1.482.712',
+  },
+  {
+    hash: '0x55b2…c019',
+    name: 'Rina Wulandari',
+    id: '3273••••8821',
+    program: 'Beasiswa Daerah',
+    category: 'Nominal salah',
+    reason: 'Transfer dengan nominal nol tidak diizinkan.',
+    block: '1.482.590',
+  },
+]
+export const activities = [
+  {
+    title: 'Batch #409 berhasil disalurkan',
+    detail: 'Rp 420.000.000 kepada 700 KPM · PKH Tahap IV',
+    time: 'Baru saja',
+    success: true,
+  },
+  {
+    title: 'Transaksi duplikat ditolak',
+    detail: 'Smart contract mencegah pencairan berulang.',
+    time: '2 menit lalu',
+    success: false,
+  },
+  {
+    title: 'Whitelist wallet diperbarui',
+    detail: '125 wallet ditambahkan ke Beasiswa Daerah.',
+    time: '18 menit lalu',
+    success: true,
+  },
+]

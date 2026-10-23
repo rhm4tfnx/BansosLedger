@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { transactions } from '@/constants/explorer-data'
 import { TransactionDetails } from '@/components/features/explorer/transaction-details'
+import { DistributionExplorer } from '@/components/features/dashboard/disbursement-detail'
 
 export const metadata: Metadata = {
   title: 'Detail Transaksi | BansosLedger',
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
 
 export default async function TransactionPage({ params }: { params: Promise<{ hash: string }> }) {
   const { hash } = await params
+  if (/^0xd15b[0-9a-f]{60}$/i.test(hash)) return <DistributionExplorer hash={hash} />
   const transaction = transactions.find((t) => t.hash.toLowerCase() === hash.toLowerCase())
   if (!transaction) notFound()
   return <TransactionDetails key={transaction.hash} transaction={transaction} />
