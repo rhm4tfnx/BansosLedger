@@ -9,7 +9,6 @@ import {
   FlaskConical,
   ArrowUpRight,
 } from 'lucide-react'
-import { Dashboard } from '@/components/features/dashboard/overview/dashboard'
 import { VerificationSecurity } from '@/components/features/dashboard/verification/verification-security'
 import { testRecords, money, statusOf, type VerificationRecord } from '@/mocks/verification-data'
 import s from '@/components/features/dashboard/verification/verification.module.css'
@@ -53,7 +52,7 @@ export function Verification() {
         .includes(query.toLowerCase()),
   )
   return (
-    <Dashboard section="Verifikasi integritas">
+    <>
       <div className={s.page}>
         <div className={s.breadcrumb}>
           Dashboard <span>/</span> Verifikasi integritas
@@ -428,6 +427,6 @@ export function Verification() {
           </p>
         </dialog>
       </div>
-    </Dashboard>
+    </>
   )
 }

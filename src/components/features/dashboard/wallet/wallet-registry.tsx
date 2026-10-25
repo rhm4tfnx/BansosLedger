@@ -2,7 +2,6 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { Download, ShieldCheck, Copy, LockKeyhole, X } from 'lucide-react'
-import { Dashboard } from '@/components/features/dashboard/overview/dashboard'
 import { WalletPanels } from '@/components/features/dashboard/wallet/wallet-panels'
 import {
   wallets,
@@ -70,7 +69,7 @@ export function WalletRegistry() {
     setNotice('CSV data contoh registri dan event diekspor.')
   }
   return (
-    <Dashboard section="Registri wallet / role">
+    <>
       <div className={s.page}>
         <div className={s.breadcrumb}>Dashboard / Tata kelola / Registri wallet</div>
         <section className={s.card}>
@@ -420,6 +419,6 @@ export function WalletRegistry() {
           </button>
         </dialog>
       </div>
-    </Dashboard>
+    </>
   )
 }

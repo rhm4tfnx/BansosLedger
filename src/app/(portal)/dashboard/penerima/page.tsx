@@ -1,8 +1,5 @@
 import type { Metadata } from 'next'
-import { Outfit } from 'next/font/google'
-import { Dashboard } from '@/components/features/dashboard/overview/dashboard'
 import { Recipients } from '@/components/features/dashboard/recipients/recipients'
-const outfit = Outfit({ subsets: ['latin'], display: 'swap', variable: '--font-dashboard' })
 export const metadata: Metadata = {
   title: 'Penerima Bantuan | BansosLedger',
   description: 'Pengelolaan penerima bantuan sosial Kelurahan Takkalasi.',
@@ -10,10 +7,10 @@ export const metadata: Metadata = {
 }
 export default function Page() {
   return (
-    <div className={outfit.variable}>
-      <Dashboard>
+    <>
+      <>
         <Recipients />
-      </Dashboard>
-    </div>
+      </>
+    </>
   )
 }

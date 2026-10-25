@@ -27,7 +27,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { Dashboard } from '@/components/features/dashboard/overview/dashboard'
 import { ReportCharts } from '@/components/features/dashboard/reports/report-charts'
 import {
   recap,
@@ -236,7 +235,7 @@ export function Reports() {
     setModal('document')
   }
   return (
-    <Dashboard section="Laporan & LPJ">
+    <>
       <div className={s.page}>
         <header className={s.hero}>
           <div>
@@ -1052,6 +1051,6 @@ export function Reports() {
           </DialogContent>
         </Dialog>
       </div>
-    </Dashboard>
+    </>
   )
 }

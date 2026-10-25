@@ -1,7 +1,6 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import { Dashboard } from '@/components/features/dashboard/overview/dashboard'
 import { recipients, short, useDisbursements, wita, type Distribution } from '@/mocks/disbursement-data'
 import { commitment, masked, money } from '@/mocks/recipient-data'
 import s from '@/components/features/dashboard/disbursements/disbursements.module.css'
@@ -220,7 +219,7 @@ export function DistributionExplorer({ hash }: { hash: string }) {
   const { data } = useDisbursements()
   const row = data.rows.find((r) => r.hash?.toLowerCase() === hash.toLowerCase())
   return (
-    <Dashboard section="Penyaluran & IPFS">
+    <>
       <div className={s.page}>
         <div className={s.heading}>
           <div>
@@ -242,6 +241,6 @@ export function DistributionExplorer({ hash }: { hash: string }) {
           </div>
         )}
       </div>
-    </Dashboard>
+    </>
   )
 }

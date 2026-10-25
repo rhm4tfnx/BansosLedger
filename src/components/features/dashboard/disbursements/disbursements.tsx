@@ -13,7 +13,6 @@ import {
   CircleX,
   FileCheck2,
 } from 'lucide-react'
-import { Dashboard } from '@/components/features/dashboard/overview/dashboard'
 import { RecipientDialog } from '@/components/features/dashboard/recipients/recipient-dialog'
 import { DisbursementWizard } from '@/components/features/dashboard/disbursements/disbursement-wizard'
 import { DisbursementDetail } from '@/components/features/dashboard/disbursements/disbursement-detail'
@@ -129,7 +128,7 @@ export function Disbursements() {
   }
   const selected = data.rows.find((r) => r.id === detail)
   return (
-    <Dashboard section="Penyaluran & IPFS">
+    <>
       <div className={s.page}>
         <div className={s.heading}>
           <div>
@@ -537,6 +536,6 @@ export function Disbursements() {
           </RecipientDialog>
         )}
       </div>
-    </Dashboard>
+    </>
   )
 }

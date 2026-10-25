@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ShieldCheck, ShieldAlert, Plus, Copy, Activity, Server, CheckCircle2 } from 'lucide-react'
-import { Dashboard } from '@/components/features/dashboard/overview/dashboard'
 import { NetworkWidget, institutions, initialBlocks } from '@/components/features/dashboard/monitoring/network-widget'
 import s from '@/components/features/dashboard/monitoring/monitoring.module.css'
 const addresses = [
@@ -51,7 +50,7 @@ export function NetworkMonitoring() {
     setNotice('Blok simulasi difinalisasi. Pengusul beralih ke validator online berikutnya.')
   }
   return (
-    <Dashboard section="Status jaringan">
+    <>
       <div className={s.page}>
         <header className={s.hero}>
           <div>
@@ -399,6 +398,6 @@ export function NetworkMonitoring() {
           serta penguncian transaksi di server memerlukan integrasi backend.
         </p>
       </div>
-    </Dashboard>
+    </>
   )
 }

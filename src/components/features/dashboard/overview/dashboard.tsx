@@ -1,53 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
-import {
-  LayoutDashboard,
-  Users,
-  Layers,
-  ArrowLeftRight,
-  ShieldX,
-  Blocks,
-  Search,
-  AlignLeft,
-  Bell,
-  ChevronDown,
-  ArrowUpRight,
-  Plus,
-  RotateCw,
-  Download,
-  ShieldCheck,
-  CircleCheck,
-  Clock3,
-  X,
-  ArrowRight,
-  ExternalLink,
-} from 'lucide-react'
-import { DistributionCharts } from '@/components/features/dashboard/overview/distribution-charts'
+import { Users, Layers, ArrowLeftRight, Search, ArrowUpRight, Plus, RotateCw, Download, ShieldCheck, Clock3, X, ArrowRight } from 'lucide-react'
+import { DistributionCharts } from './distribution-charts'
 import { rejectedTransactions } from '@/constants/dashboard'
-import styles from '@/components/features/dashboard/overview/dashboard.module.css'
+import { useDashboardSearch } from '../dashboard-shell'
+import styles from './dashboard.module.css'
 
-const navigation = [
-  { label: 'Ringkasan', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Penerima Bantuan', href: '/dashboard/penerima', icon: Users },
-  { label: 'Program bantuan', href: '/dashboard/bantuan', icon: Layers },
-  { label: 'Penyaluran & IPFS', href: '/dashboard/penyaluran', icon: ArrowLeftRight },
-  { label: 'Transaksi on-chain', href: '/explorer', icon: Blocks },
-  { label: 'Transaksi ditolak', href: '#ditolak', icon: ShieldX, count: '23' },
-  { label: 'Laporan & LPJ', href: '/dashboard/laporan', icon: Download },
-]
-
-export function Dashboard({
-  children,
-  section = 'Penerima Bantuan',
-}: {
-  children?: React.ReactNode
-  section?: string
-}) {
-  const [sidebar, setSidebar] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
-  const [query, setQuery] = useState('')
+export function Dashboard() {
+  const { query, setQuery } = useDashboardSearch()
   const [filter, setFilter] = useState('Semua')
   const [notice, setNotice] = useState('')
   const rows = rejectedTransactions.filter(
@@ -72,186 +33,7 @@ export function Dashboard({
     URL.revokeObjectURL(url)
   }
   return (
-    <div className={`${styles.dashboard} ${collapsed ? styles.collapsed : ''}`}>
-      {sidebar && (
-        <button
-          className={styles.backdrop}
-          aria-label="Tutup navigasi"
-          onClick={() => setSidebar(false)}
-        />
-      )}
-      <aside id="dashboard-sidebar" className={`${styles.sidebar} ${sidebar ? styles.open : ''}`}>
-        <Link href="/" className={styles.brand}>
-          <span className={styles.logoCrop}>
-            <img src="/images/bansosledger-logo.png" alt="BansosLedger" width={2145} height={733} />
-          </span>
-        </Link>
-        <span className={styles.workspace}>WORKSPACE PENGELOLA</span>
-        <nav aria-label="Navigasi dashboard">
-          {navigation.map((item, i) => (
-            <Link
-              key={item.label}
-              href={item.href.startsWith('#') ? `/dashboard${item.href}` : item.href}
-              title={item.label}
-              aria-label={item.label}
-              onClick={() => setSidebar(false)}
-              className={
-                i ===
-                (children
-                  ? section === 'Status jaringan' ||
-                    section === 'Verifikasi integritas' ||
-                    section === 'Log aktivitas' ||
-                    section === 'Registri wallet / role' || section === 'Pengaturan akun'
-                    ? -1
-                    : section === 'Laporan & LPJ'
-                      ? 6
-                      : section === 'Penyaluran & IPFS'
-                        ? 3
-                        : section === 'Program Bantuan'
-                          ? 2
-                          : 1
-                  : 0)
-                  ? styles.active
-                  : ''
-              }
-            >
-              <item.icon size={19} />
-              <span>{item.label}</span>
-              {item.count && <small>{item.count}</small>}
-            </Link>
-          ))}
-        </nav>
-        <div className={styles.navSection}>MONITORING</div>
-        <nav>
-          <Link
-            href="/dashboard/monitoring"
-            title="Status jaringan"
-            aria-label="Status jaringan"
-            aria-current={section === 'Status jaringan' ? 'page' : undefined}
-            className={section === 'Status jaringan' ? styles.active : ''}
-            onClick={() => setSidebar(false)}
-          >
-            <ShieldCheck size={19} />
-            <span>Status jaringan</span>
-          </Link>
-          <Link
-            href="/dashboard/verifikasi"
-            title="Verifikasi integritas"
-            aria-label="Verifikasi integritas"
-            aria-current={section === 'Verifikasi integritas' ? 'page' : undefined}
-            className={section === 'Verifikasi integritas' ? styles.active : ''}
-            onClick={() => setSidebar(false)}
-          >
-            <ShieldCheck size={19} />
-            <span>Verifikasi integritas</span>
-          </Link>
-          <Link
-            href="/dashboard/log-aktivitas"
-            title="Log aktivitas"
-            aria-label="Log aktivitas"
-            aria-current={section === 'Log aktivitas' ? 'page' : undefined}
-            className={section === 'Log aktivitas' ? styles.active : ''}
-            onClick={() => setSidebar(false)}
-          >
-            <Clock3 size={19} />
-            <span>Log aktivitas</span>
-          </Link>
-          <Link
-            href="/dashboard/wallet"
-            title="Registri wallet / role"
-            aria-label="Registri wallet / role"
-            aria-current={section === 'Registri wallet / role' ? 'page' : undefined}
-            className={section === 'Registri wallet / role' ? styles.active : ''}
-            onClick={() => setSidebar(false)}
-          >
-            <ShieldCheck size={19} />
-            <span>Registri wallet / role</span>
-          </Link>
-          <Link href="/dashboard/pengaturan" title="Pengaturan akun" aria-label="Pengaturan akun" className={section === 'Pengaturan akun' ? styles.active : ''} aria-current={section === 'Pengaturan akun' ? 'page' : undefined} onClick={() => setSidebar(false)}><ShieldCheck size={19}/><span>Pengaturan akun</span></Link>
-          <Link href="/explorer" title="Block explorer" aria-label="Block explorer">
-            <ExternalLink size={19} />
-            <span>Block explorer</span>
-          </Link>
-        </nav>
-        <div className={styles.networkMini}>
-          <div>
-            <span className={styles.statusDot} />
-            Jaringan Besu
-          </div>
-          <p>
-            Block height <strong>#1.482.914</strong>
-          </p>
-          <p>
-            Validator aktif<strong>4 / 4</strong>
-          </p>
-        </div>
-        <Link href="/" className={styles.homeLink}>
-          Kembali ke halaman publik <ArrowUpRight size={15} />
-        </Link>
-      </aside>
-      <div className={styles.mainColumn}>
-        <header className={styles.header}>
-          <button
-            className={`${styles.iconButton} ${styles.desktopToggle}`}
-            aria-label={collapsed ? 'Perluas navigasi' : 'Ringkas navigasi'}
-            aria-expanded={!collapsed}
-            aria-controls="dashboard-sidebar"
-            onClick={() => setCollapsed(!collapsed)}
-          >
-            <AlignLeft size={18} strokeWidth={1.6} aria-hidden="true" />
-          </button>
-          <button
-            className={`${styles.iconButton} ${styles.mobileToggle}`}
-            aria-label="Buka navigasi"
-            aria-expanded={sidebar}
-            onClick={() => setSidebar(!sidebar)}
-          >
-            <AlignLeft size={18} strokeWidth={1.6} aria-hidden="true" />
-          </button>
-          {children ? (
-            <span className={styles.period}>Pengelolaan / {section}</span>
-          ) : (
-            <label className={styles.search}>
-              <Search size={19} />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Cari nama, hash, atau alasan revert..."
-                aria-label="Cari transaksi"
-              />
-              <kbd>⌕</kbd>
-            </label>
-          )}
-          <div className={styles.headerRight}>
-            <span className={styles.headerNetwork}>
-              <span className={styles.statusDot} />
-              Besu · 4/4 validator
-            </span>
-            <button
-              className={styles.iconButton}
-              aria-label="Notifikasi"
-              onClick={() =>
-                setNotice(
-                  'Pratinjau notifikasi: 23 transaksi ditolak memerlukan peninjauan operator.',
-                )
-              }
-            >
-              <Bell size={19} />
-              <i />
-            </button>
-            <div className={styles.profile}>
-              <span>OP</span>
-              <div>
-                <strong>Operator</strong>
-                <small>Pengelola bantuan</small>
-              </div>
-              <ChevronDown size={15} />
-            </div>
-          </div>
-        </header>
-        <main className={styles.content} id="ringkasan">
-          {children || (
-            <>
+    <>
               <div className={styles.titleRow}>
                 <div>
                   <div className={styles.eyebrow}>WORKSPACE / RINGKASAN</div>
@@ -479,14 +261,6 @@ export function Dashboard({
                   </section>
                 </div>
               </div>
-            </>
-          )}
-          <footer className={styles.footer}>
-            <span>© 2026 BansosLedger. Transparansi untuk setiap bantuan.</span>
-            <span>Dashboard pengelola</span>
-          </footer>
-        </main>
-      </div>
-    </div>
+    </>
   )
 }

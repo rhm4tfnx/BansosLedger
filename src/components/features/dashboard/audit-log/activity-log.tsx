@@ -1,7 +1,6 @@
 'use client'
 import { useRef, useState } from 'react'
 import { Download, Printer, ShieldCheck, Search, X, LockKeyhole, Plus } from 'lucide-react'
-import { Dashboard } from '@/components/features/dashboard/overview/dashboard'
 import { AuditPanels } from '@/components/features/dashboard/audit-log/audit-panels'
 import {
   appendAudit,
@@ -69,7 +68,7 @@ export function ActivityLog() {
     })
   }
   return (
-    <Dashboard section="Log aktivitas">
+    <>
       <div className={s.page}>
         <div className={s.breadcrumb}>Dashboard / Monitoring / Log aktivitas</div>
         <section className={s.card}>
@@ -479,6 +478,6 @@ export function ActivityLog() {
           </section>
         </dialog>
       </div>
-    </Dashboard>
+    </>
   )
 }
