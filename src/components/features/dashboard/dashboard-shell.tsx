@@ -7,7 +7,9 @@ import { LogOut } from 'lucide-react'
 import { LayoutDashboard, Users, Layers, ArrowLeftRight, ShieldX, Download, ShieldCheck, Clock3, ExternalLink, ArrowUpRight, AlignLeft, Search, Bell, ChevronDown, X } from 'lucide-react'
 import styles from './overview/dashboard.module.css'
 
-import { RoleAccessProvider, useRoleAccess } from '@/hooks/use-role-access'
+import { ForceChangePasswordDialog } from '@/components/features/auth/force-change-password-dialog'
+import { isDevRolePreviewEnabled, RoleAccessProvider, useRoleAccess } from '@/hooks/use-role-access'
+import { useLogoutMutation } from '@/lib/api/hooks/auth'
 import { roles, type Role, type Permission } from '@/types/rbac'
 import { ROLE_METADATA, dashboardRoutePermissions } from '@/lib/rbac'
 
@@ -35,25 +37,56 @@ export function useDashboardSearch() {
   return context
 }
 
-export function DashboardShell({ children, initialRole, walletVerified }: { children: ReactNode; initialRole: Role; walletVerified: boolean }) {
-  return <RoleAccessProvider initialRole={initialRole}><DashboardFrame walletVerified={walletVerified}>{children}</DashboardFrame></RoleAccessProvider>
+export function DashboardShell({
+  children,
+  initialRole,
+  walletVerified,
+  initialMustChangePassword = false,
+}: {
+  children: ReactNode
+  initialRole: Role
+  walletVerified: boolean
+  initialMustChangePassword?: boolean
+}) {
+  return (
+    <RoleAccessProvider initialRole={initialRole}>
+      <DashboardFrame
+        walletVerified={walletVerified}
+        initialMustChangePassword={initialMustChangePassword}
+      >
+        {children}
+      </DashboardFrame>
+    </RoleAccessProvider>
+  )
 }
 
-function DashboardFrame({ children, walletVerified }: { children: ReactNode; walletVerified: boolean }) {
-  const { role, meta, can, canAccessRoute, isAuthenticated, isReadOnly, setPreviewRole } = useRoleAccess()
-  const previewEnabled = process.env.NEXT_PUBLIC_ENABLE_UI_ROLE_PREVIEW === 'true' && isAuthenticated
+function DashboardFrame({
+  children,
+  walletVerified,
+  initialMustChangePassword,
+}: {
+  children: ReactNode
+  walletVerified: boolean
+  initialMustChangePassword: boolean
+}) {
+  const { role, session, meta, can, canAccessRoute, isAuthenticated, isReadOnly, setPreviewRole } = useRoleAccess()
+  const previewEnabled = isDevRolePreviewEnabled() && isAuthenticated
+  const effectiveWalletVerified = session ? session.walletVerified : walletVerified
   const router = useRouter()
-  const [loggingOut, setLoggingOut] = useState(false)
+  const logoutMutation = useLogoutMutation()
+  const loggingOut = logoutMutation.isPending
+
   async function logout() {
     if (loggingOut) return
-    setLoggingOut(true)
     try {
-      const response = await fetch('/api/auth/logout', { method: 'POST' })
-      if (!response.ok) throw new Error('Logout gagal. Silakan coba kembali.')
+      await logoutMutation.mutateAsync()
       router.replace('/login')
       router.refresh()
-    } catch { setNotice('Logout gagal. Silakan coba kembali.'); setLoggingOut(false) }
+    } catch {
+      setNotice('Logout gagal. Silakan coba kembali.')
+    }
   }
+
   const permissionFor = (href: string): Permission => href === '/explorer' ? 'explorer:read' : dashboardRoutePermissions[href.split('#')[0]]
   const visibleNavigation = navigation.map(item => ({ ...item, permission: permissionFor(item.href) })).filter(item => can(item.permission))
   const visibleMonitoring = monitoring.map(item => ({ ...item, permission: permissionFor(item.href) })).filter(item => can(item.permission))
@@ -67,6 +100,7 @@ function DashboardFrame({ children, walletVerified }: { children: ReactNode; wal
 
   return (
     <SearchContext.Provider value={{ query, setQuery }}>
+      <ForceChangePasswordDialog initialOpen={initialMustChangePassword} />
       <div className={`${styles.dashboard} ${collapsed ? styles.collapsed : ''}`}>
         {sidebar && <button className={styles.backdrop} aria-label="Tutup navigasi" onClick={() => setSidebar(false)} />}
         <aside id="dashboard-sidebar" className={`${styles.sidebar} ${sidebar ? styles.open : ''}`}>
@@ -89,7 +123,7 @@ function DashboardFrame({ children, walletVerified }: { children: ReactNode; wal
             {pathname === '/dashboard' ? <label className={styles.search}><Search size={19} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari nama, hash, atau alasan revert..." aria-label="Cari transaksi" /><kbd>⌕</kbd></label> : <span className={styles.period}>Pengelolaan / {section === 'Program bantuan' ? 'Program Bantuan' : section}</span>}
             <div className={styles.headerRight}>
               <span className={styles.headerNetwork}><span className={styles.statusDot} />Besu · 4/4 validator</span>
-              <span className="text-xs">{can('wallet:verify-session') ? (walletVerified ? 'Wallet terverifikasi' : 'Wallet belum terverifikasi') : 'Wallet tidak diperlukan'}</span>
+              <span className="text-xs">{can('wallet:verify-session') ? (effectiveWalletVerified ? 'Wallet terverifikasi' : 'Wallet belum terverifikasi') : 'Wallet tidak diperlukan'}</span>
               <button disabled={loggingOut} onClick={logout} className="flex shrink-0 items-center gap-1 text-sm" aria-label="Keluar"><LogOut size={17} />{loggingOut ? 'Keluar…' : 'Keluar'}</button>
               <button className={styles.iconButton} aria-label="Notifikasi" onClick={() => setNotice('Pratinjau notifikasi: 23 transaksi ditolak memerlukan peninjauan operator.')}><Bell size={19} /><i /></button>
               {previewEnabled && <label className="text-xs">Simulasi UI (non-production)<select id="role-preview" aria-label="Simulasi Pratinjau UI Role" className="block max-w-48 rounded border bg-white p-1 text-black" value={role ?? ''} onChange={event => setPreviewRole?.(event.target.value as Role || null)}><option value="">Belum Login</option>{roles.map(value => <option key={value} value={value}>{ROLE_METADATA[value].shortLabel}</option>)}</select></label>}

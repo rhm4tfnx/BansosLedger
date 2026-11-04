@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Mona_Sans, Geist_Mono } from 'next/font/google'
+import { QueryProvider } from '@/components/providers/query-provider'
 import '@/styles/globals.css'
 
 const monaSans = Mona_Sans({ subsets: ['latin'], variable: '--font-mona-sans' })
@@ -43,7 +44,7 @@ export default function RootLayout({
   return (
     <html lang="id">
       <body className={`${monaSans.variable} ${monoSpace.variable} antialiased`}>
-        {children}
+        <QueryProvider>{children}</QueryProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

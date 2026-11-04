@@ -13,5 +13,15 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const session = await getVerifiedServerSession().catch(() => null)
   if (!session) redirect('/login')
   if (!hasPermission(session.role, 'dashboard:read')) redirect('/explorer')
-  return <div className={outfit.variable}><DashboardShell initialRole={session.role} walletVerified={session.walletVerified}>{children}</DashboardShell></div>
+  return (
+    <div className={outfit.variable}>
+      <DashboardShell
+        initialRole={session.role}
+        walletVerified={session.walletVerified}
+        initialMustChangePassword={Boolean(session.mustChangePassword)}
+      >
+        {children}
+      </DashboardShell>
+    </div>
+  )
 }
