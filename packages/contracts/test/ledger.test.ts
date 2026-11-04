@@ -68,7 +68,7 @@ describe('BansosLedger immutable record and PRD security scenarios', () => {
     const { ledger, op, stranger } = await loadFixture(fixture)
     const receipt = await (await op.recordDisbursement(input())).wait()
     const record = await ledger.getDisbursement(input().refId)
-    const allowed = new Set(['setAuthorizedWallet', 'pause', 'unpause', 'createProgram', 'registerRecipients', 'closeProgram', 'recordDisbursement', 'recordDisbursementBatch', 'transferOwnership', 'acceptOwnership', 'renounceOwnership'])
+    const allowed = new Set(['setAuthorizedWallet', 'pause', 'unpause', 'createProgram', 'registerRecipients', 'closeProgram', 'recordDisbursement', 'recordDisbursementBatch', 'transferOwnership', 'acceptOwnership'])
     for (const fragment of ledger.interface.fragments) if (fragment instanceof FunctionFragment && !['view', 'pure'].includes(fragment.stateMutability)) expect(allowed.has(fragment.name), fragment.name).to.equal(true)
     await expect(stranger.sendTransaction({ to: await ledger.getAddress(), data: id('deleteDisbursement(bytes32)').slice(0, 10) + input().refId.slice(2) })).to.be.reverted
     expect(await ledger.getDisbursement(input().refId)).to.deep.equal(record)
@@ -204,7 +204,8 @@ describe('Atomic batches, pausing and two-step ownership', () => {
   })
   it('only owner can administer; pause disables all operational methods but leaves views and rotation available', async () => {
     const { ledger, op, owner, operator, successor } = await loadFixture(fixture)
-    for (const call of [() => op.pause(), () => op.unpause(), () => op.setAuthorizedWallet(successor.address), () => op.transferOwnership(successor.address), () => op.renounceOwnership()]) await expect(call()).to.be.revertedWithCustomError(ledger, 'OwnableUnauthorizedAccount').withArgs(operator.address)
+    for (const call of [() => op.pause(), () => op.unpause(), () => op.setAuthorizedWallet(successor.address), () => op.transferOwnership(successor.address)]) await expect(call()).to.be.revertedWithCustomError(ledger, 'OwnableUnauthorizedAccount').withArgs(operator.address)
+    await expect(op.renounceOwnership()).to.be.revertedWithCustomError(ledger, 'RenounceDisabled')
     await expect(ledger.unpause()).to.be.revertedWithCustomError(ledger, 'ExpectedPause')
     await expect(ledger.pause()).to.emit(ledger, 'Paused').withArgs(owner.address)
     await expect(ledger.pause()).to.be.revertedWithCustomError(ledger, 'EnforcedPause')
@@ -244,27 +245,35 @@ describe('Atomic batches, pausing and two-step ownership', () => {
     await op.setAuthorizedWallet(successor.address)
     await expect((ledger.connect(successor) as Contract).recordDisbursement(input())).not.to.be.reverted
   })
-  it('rejects stranger renunciation and preserves the owner', async () => {
-    const { ledger, stranger } = await loadFixture(fixture)
+  it('rejects stranger and operator renunciation with RenounceDisabled and preserves owner and pendingOwner', async () => {
+    const { ledger, op, stranger, successor } = await loadFixture(fixture)
     const originalOwner = await ledger.owner()
-    await expect((ledger.connect(stranger) as Contract).renounceOwnership())
-      .to.be.revertedWithCustomError(ledger, 'OwnableUnauthorizedAccount').withArgs(stranger.address)
-    expect(await ledger.owner()).to.equal(originalOwner)
+    await ledger.transferOwnership(successor.address)
+    for (const caller of [ledger.connect(stranger) as Contract, op]) {
+      await expect(caller.renounceOwnership())
+        .to.be.revertedWithCustomError(ledger, 'RenounceDisabled')
+      expect(await ledger.owner()).to.equal(originalOwner)
+      expect(await ledger.pendingOwner()).to.equal(successor.address)
+    }
   })
   it('renunciation cannot discard ownership or pending transfer, including while paused', async () => {
     const { ledger, owner, operator, successor, stranger } = await loadFixture(fixture)
     await ledger.transferOwnership(successor.address)
     for (const paused of [false, true]) {
       if (paused) await ledger.pause()
-      await expect(ledger.renounceOwnership()).to.be.revertedWithCustomError(ledger, 'RenounceOwnershipDisabled')
+      await expect(ledger.renounceOwnership()).to.be.revertedWithCustomError(ledger, 'RenounceDisabled')
+      expect(await ledger.owner()).to.equal(owner.address)
+      expect(await ledger.pendingOwner()).to.equal(successor.address)
+      await expect((ledger.connect(stranger) as Contract).renounceOwnership()).to.be.revertedWithCustomError(ledger, 'RenounceDisabled')
       expect(await ledger.owner()).to.equal(owner.address)
       expect(await ledger.pendingOwner()).to.equal(successor.address)
     }
     await expect(ledger.setAuthorizedWallet(stranger.address)).to.emit(ledger, 'AuthorizedWalletChanged').withArgs(operator.address, stranger.address)
     const next = ledger.connect(successor) as Contract
     await next.acceptOwnership()
-    await expect(next.renounceOwnership()).to.be.revertedWithCustomError(ledger, 'RenounceOwnershipDisabled')
+    await expect(next.renounceOwnership()).to.be.revertedWithCustomError(ledger, 'RenounceDisabled')
     expect(await ledger.owner()).to.equal(successor.address)
+    expect(await ledger.pendingOwner()).to.equal(ZeroAddress)
     await next.setAuthorizedWallet(operator.address)
     await next.unpause()
     expect(await ledger.authorizedWallet()).to.equal(operator.address)

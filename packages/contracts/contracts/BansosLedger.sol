@@ -85,8 +85,8 @@ contract BansosLedger is Ownable2Step, Pausable {
     error InvalidBatchSize();
     /// @notice A recipient commitment cannot be zero.
     error InvalidCommitment();
-    /// @notice Institutional ownership cannot be permanently discarded.
-    error RenounceOwnershipDisabled();
+    /// @notice Institutional ownership cannot be permanently discarded (PRD SC-D9).
+    error RenounceDisabled();
 
     /// @notice Immutable terms of a newly created program.
     event ProgramCreated(bytes32 indexed programId, uint128 amountPerRecipient, uint32 startPeriod, uint32 endPeriod);
@@ -131,10 +131,10 @@ contract BansosLedger is Ownable2Step, Pausable {
         _setAuthorizedWallet(newWallet);
     }
 
-    /// @notice Preserve institutional administration; ownership transfer remains available.
-    /// @dev Always reverts for the owner; other callers fail the inherited owner guard.
-    function renounceOwnership() public override onlyOwner {
-        revert RenounceOwnershipDisabled();
+    /// @notice Ownership renunciation is permanently disabled; ownership can only be transferred via transferOwnership + acceptOwnership.
+    /// @dev Always reverts with RenounceDisabled() for every caller per PRD SC-D9.
+    function renounceOwnership() public pure override {
+        revert RenounceDisabled();
     }
 
     /// @notice Stop every operational write in an emergency.

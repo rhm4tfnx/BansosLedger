@@ -1,10 +1,10 @@
 import { expect } from 'chai'
-import { artifacts } from 'hardhat'
-import { Interface, FunctionFragment, EventFragment, ErrorFragment, type ParamType } from 'ethers'
+import { artifacts, ethers } from 'hardhat'
+import { Contract, Interface, FunctionFragment, EventFragment, ErrorFragment, type ParamType } from 'ethers'
 import { backendInterface } from './backend-abi'
 
 function shape(params: readonly ParamType[]): unknown[] {
-  return params.map(param => ({ type: param.format('sighash'), indexed: param.indexed ?? null, components: param.components ? shape(param.components) : null, array: param.arrayChildren ? shape([param.arrayChildren]) : null }))
+  return params.map(param => ({ type: param.format('sighash'), indexed: Boolean(param.indexed), components: param.components ? shape(param.components) : null, array: param.arrayChildren ? shape([param.arrayChildren]) : null }))
 }
 
 describe('Compiled ABI compatibility with unchanged backend specification', () => {
@@ -34,4 +34,25 @@ describe('Compiled ABI compatibility with unchanged backend specification', () =
       } else throw new Error(`Unhandled ABI fragment: ${fragment.type}`)
     })
   }
+
+  it('SC-D9: exposes pure renounceOwnership() and RenounceDisabled() error, and reverts with RenounceDisabled for owner and stranger while preserving owner and pendingOwner', async () => {
+    const actual = new Interface((await artifacts.readArtifact('BansosLedger')).abi)
+    const renounceFn = actual.getFunction('renounceOwnership()')
+    expect(renounceFn).not.to.equal(null)
+    expect(renounceFn!.stateMutability).to.equal('pure')
+    expect(actual.getError('RenounceDisabled()')).not.to.equal(null)
+    expect(actual.getError('RenounceOwnershipDisabled()')).to.equal(null)
+
+    const [owner, operator, stranger, successor] = await ethers.getSigners()
+    const factory = await ethers.getContractFactory('BansosLedger', owner)
+    const ledger = (await factory.deploy(operator.address)) as unknown as Contract
+    await ledger.waitForDeployment()
+    await ledger.transferOwnership(successor.address)
+
+    for (const caller of [ledger, ledger.connect(stranger) as Contract]) {
+      await expect(caller.renounceOwnership()).to.be.revertedWithCustomError(ledger, 'RenounceDisabled')
+      expect(await ledger.owner()).to.equal(owner.address)
+      expect(await ledger.pendingOwner()).to.equal(successor.address)
+    }
+  })
 })

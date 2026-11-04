@@ -35,7 +35,7 @@ export const ledgerABI = [
   'error InvalidWallet()',
   'error InvalidBatchSize()',
   'error InvalidCommitment()',
-  'error RenounceOwnershipDisabled()',
+  'error RenounceDisabled()',
   'error OwnableUnauthorizedAccount(address account)',
   'error OwnableInvalidOwner(address owner)',
 ] as const
