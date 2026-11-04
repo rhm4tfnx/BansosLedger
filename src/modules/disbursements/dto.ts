@@ -2,11 +2,16 @@ import 'server-only'
 import {
   disbursementDtoSchema,
   disbursementCreatedDtoSchema,
+  disbursementPreflightDtoSchema,
+  disbursementTxIntentDtoSchema,
   evidenceDtoSchema,
   attemptDtoSchema,
   withdrawEvidenceDtoSchema,
   type DisbursementDto,
   type DisbursementCreatedDto,
+  type DisbursementPreflightDto,
+  type DisbursementTxIntentDto,
+  type PreflightCheckKey,
   type EvidenceDto,
   type AttemptDto,
   type WithdrawEvidenceDto,
@@ -136,6 +141,50 @@ export function toWithdrawEvidenceDto(data: any): WithdrawEvidenceDto {
     ...(data?.message ? { message: String(data.message) } : {}),
   }
   return withdrawEvidenceDtoSchema.parse(dto)
+}
+
+export interface PreflightCheckInput {
+  key: PreflightCheckKey
+  label: string
+  ok: boolean
+  message?: string
+}
+
+export interface PreflightResultInput {
+  ok: boolean
+  checks: readonly PreflightCheckInput[]
+}
+
+export function toDisbursementPreflightDto(data: PreflightResultInput): DisbursementPreflightDto {
+  const dto = {
+    ok: Boolean(data.ok),
+    checks: Array.isArray(data.checks)
+      ? data.checks.map(check => ({
+          key: check.key,
+          label: String(check.label),
+          ok: Boolean(check.ok),
+          ...(check.message !== undefined ? { message: String(check.message) } : {}),
+        }))
+      : [],
+  }
+  return disbursementPreflightDtoSchema.parse(dto)
+}
+
+export interface TxIntentResultInput {
+  to: string
+  data: string
+  chainId: number
+  evidenceCid: string
+}
+
+export function toDisbursementTxIntentDto(data: TxIntentResultInput): DisbursementTxIntentDto {
+  const dto = {
+    to: String(data.to),
+    data: String(data.data),
+    chainId: Math.round(Number(data.chainId)),
+    evidenceCid: String(data.evidenceCid),
+  }
+  return disbursementTxIntentDtoSchema.parse(dto)
 }
 
 

@@ -58,9 +58,23 @@ function recipientEnrichmentStages(): PipelineStage.FacetPipelineStage[] {
     },
   ]
 }
+function assertNoNikInQuery(request: Request) {
+  const rawQuery = query(request)
+  for (const [key, val] of Object.entries(rawQuery)) {
+    if (key === 'nik' && val !== undefined) {
+      throw new DomainError(400, 'NIK_IN_QUERY', 'NIK tidak boleh dikirim melalui URL; gunakan pencarian POST.')
+    }
+    if (typeof val === 'string' && /^\d{16}$/.test(val.trim())) {
+      throw new DomainError(400, 'NIK_IN_QUERY', 'NIK tidak boleh dikirim melalui URL; gunakan pencarian POST.')
+    }
+  }
+}
+
 export async function list(ctx: DomainContext) {
+  assertNoNikInQuery(ctx.request)
   const paging = pageQuery(ctx.request, ['createdAt', 'updatedAt', 'name', 'status'])
   const input = z.object({
+    q: z.string().trim().max(160).optional(),
     search: z.string().trim().max(160).optional(),
     status: z.enum(['DRAFT', 'FINAL']).optional(),
     programId: idSchema.optional(),
@@ -73,11 +87,9 @@ export async function list(ctx: DomainContext) {
   const filter: FilterQuery<unknown> = { deletedAt: null }
   if (input.status) filter.status = input.status
   for (const field of ['dusun', 'rt', 'rw'] as const) if (input[field]) filter[`address.${field}`] = input[field]
-  if (input.search) {
-    if (/^\d{16}$/.test(input.search)) {
-      if (!validateNik(input.search)) return json({ data: [], total: 0, page: paging.page, limit: paging.limit, totalPages: 0 })
-      filter.nikBlindIndex = nikBlindIndex(input.search)
-    } else filter.name = { $regex: escapeSearch(input.search), $options: 'i' }
+  const keyword = input.q ?? input.search
+  if (keyword) {
+    filter.name = { $regex: escapeSearch(keyword), $options: 'i' }
   }
   const effectiveProgramId = input.programId ?? input.program
   const preFilterStages: PipelineStage[] = [{ $match: filter }]
@@ -141,6 +153,39 @@ export async function list(ctx: DomainContext) {
   ])
   const data = agg?.data ?? []
   const total = agg?.total[0]?.count ?? 0
+  return json({ data: data.map(toRecipientDto), total, page: paging.page, limit: paging.limit, totalPages: Math.ceil(total / paging.limit) })
+}
+
+// TODO(PRD §12): Exact NIK search via blind index using POST body so a NIK never appears in URLs.
+export async function searchByNik(ctx: DomainContext) {
+  assertNoNikInQuery(ctx.request)
+  const paging = pageQuery(ctx.request, ['createdAt', 'updatedAt', 'name', 'status'])
+  const { nik } = await body(ctx.request, z.object({ nik: z.string().trim().regex(/^\d{16}$/) }).strict())
+  if (!validateNik(nik)) {
+    await audit(ctx, 'RECIPIENT_NIK_SEARCH', 'recipients', 'search', { found: false })
+    return json({ data: [], total: 0, page: paging.page, limit: paging.limit, totalPages: 0 })
+  }
+  const blind = nikBlindIndex(nik)
+  const [agg] = await Recipients.aggregate<{ data: unknown[]; total: { count: number }[] }>([
+    { $match: { deletedAt: null, nikBlindIndex: blind } },
+    {
+      $facet: {
+        data: [
+          { $sort: paging.sort },
+          { $skip: paging.skip },
+          { $limit: paging.limit },
+          ...recipientEnrichmentStages(),
+        ],
+        total: [{ $count: 'count' }],
+      },
+    },
+  ])
+  const data = agg?.data ?? []
+  const total = agg?.total[0]?.count ?? 0
+  await audit(ctx, 'RECIPIENT_NIK_SEARCH', 'recipients', 'search', {
+    blindIndexPrefix: blind.slice(0, 12),
+    found: total > 0,
+  })
   return json({ data: data.map(toRecipientDto), total, page: paging.page, limit: paging.limit, totalPages: Math.ceil(total / paging.limit) })
 }
 export async function create(ctx: DomainContext) {

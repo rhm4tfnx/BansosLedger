@@ -15,6 +15,17 @@ export type EnrollmentStatus = (typeof ENROLLMENT_STATUSES)[number]
 export const DISBURSEMENT_STATUSES = ['DRAFT', 'PENDING', 'SUCCESS', 'FAILED'] as const
 export type DisbursementStatus = (typeof DISBURSEMENT_STATUSES)[number]
 
+export const PREFLIGHT_CHECK_KEYS = [
+  'program_active',
+  'period_in_range',
+  'recipient_registered',
+  'no_duplicate',
+  'amount_matches_program',
+  'recipient_final_commitment',
+  'authorized_wallet',
+] as const
+export type PreflightCheckKey = (typeof PREFLIGHT_CHECK_KEYS)[number]
+
 export const EVIDENCE_STATUSES = ['ACTIVE', 'WITHDRAWN'] as const
 export type EvidenceStatus = (typeof EVIDENCE_STATUSES)[number]
 
@@ -202,6 +213,28 @@ export const disbursementCreatedDtoSchema = disbursementDtoSchema.extend({
   deleted: z.boolean().optional(),
 }).strict()
 export type DisbursementCreatedDto = z.infer<typeof disbursementCreatedDtoSchema>
+
+export const disbursementPreflightCheckDtoSchema = z.object({
+  key: z.enum(PREFLIGHT_CHECK_KEYS),
+  label: z.string(),
+  ok: z.boolean(),
+  message: z.string().optional(),
+}).strict()
+export type DisbursementPreflightCheckDto = z.infer<typeof disbursementPreflightCheckDtoSchema>
+
+export const disbursementPreflightDtoSchema = z.object({
+  ok: z.boolean(),
+  checks: z.array(disbursementPreflightCheckDtoSchema).length(7),
+}).strict()
+export type DisbursementPreflightDto = z.infer<typeof disbursementPreflightDtoSchema>
+
+export const disbursementTxIntentDtoSchema = z.object({
+  to: z.string(),
+  data: z.string(),
+  chainId: z.number().int().positive(),
+  evidenceCid: z.string(),
+}).strict()
+export type DisbursementTxIntentDto = z.infer<typeof disbursementTxIntentDtoSchema>
 
 // 7. AuditLogDto
 export const auditLogDtoSchema = z.object({

@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'vitest'
 import { toRecipientDto } from '@/modules/recipients/dto'
 import { toProgramDto, toEnrollmentDto, toProgramEnrollmentItemDto } from '@/modules/programs/dto'
-import { toDisbursementDto, toDisbursementCreatedDto, toEvidenceDto, toAttemptDto, toWithdrawEvidenceDto } from '@/modules/disbursements/dto'
+import {
+  toDisbursementDto,
+  toDisbursementCreatedDto,
+  toDisbursementPreflightDto,
+  toDisbursementTxIntentDto,
+  toEvidenceDto,
+  toAttemptDto,
+  toWithdrawEvidenceDto,
+} from '@/modules/disbursements/dto'
 import { toAuditLogDto } from '@/modules/audit/dto'
 import { toRealizationReportDto, toDashboardSummaryDto, toWalletStatusDto } from '@/modules/reports/dto'
 import { toReconciliationDto, toNetworkStatusDto } from '@/modules/chain/dto'
@@ -27,6 +35,8 @@ import {
   programEnrollmentItemDtoSchema,
   disbursementDtoSchema,
   disbursementCreatedDtoSchema,
+  disbursementPreflightDtoSchema,
+  disbursementTxIntentDtoSchema,
   evidenceDtoSchema,
   attemptDtoSchema,
   auditLogDtoSchema,
@@ -622,6 +632,42 @@ describe('DTO Mappers - Security & Structure', () => {
     })
     assertNoForbiddenKeys(withdrawDto)
     expect(withdrawDto.status).toBe('WITHDRAWN')
+  })
+
+  test('toDisbursementPreflightDto and toDisbursementTxIntentDto exclude all forbidden keys and parse schemas', () => {
+    const preflightInput = {
+      ...dirtyFields,
+      ok: false,
+      checks: [
+        { ...dirtyFields, key: 'program_active' as const, label: 'Program aktif', ok: true },
+        { ...dirtyFields, key: 'period_in_range' as const, label: 'Periode dalam rentang program', ok: true },
+        { ...dirtyFields, key: 'recipient_registered' as const, label: 'Penerima terdaftar on-chain', ok: true },
+        { ...dirtyFields, key: 'no_duplicate' as const, label: 'Duplikasi periode', ok: true },
+        { ...dirtyFields, key: 'amount_matches_program' as const, label: 'Kesesuaian nominal', ok: true },
+        { ...dirtyFields, key: 'recipient_final_commitment' as const, label: 'Status FINAL & commitment penerima', ok: true },
+        {
+          ...dirtyFields,
+          key: 'authorized_wallet' as const,
+          label: 'Kewenangan wallet Kelurahan',
+          ok: false,
+          message: 'Wallet yang dipakai bukan wallet resmi Kelurahan. Ganti akun di MetaMask.',
+        },
+      ],
+    }
+    const preflightDto = toDisbursementPreflightDto(preflightInput)
+    assertNoForbiddenKeys(preflightDto)
+    expect(disbursementPreflightDtoSchema.parse(preflightDto)).toEqual(preflightDto)
+
+    const txIntentInput = {
+      ...dirtyFields,
+      to: '0x' + '1'.repeat(40),
+      data: '0xdeadbeef',
+      chainId: 1337,
+      evidenceCid: 'bafy' + 'a'.repeat(50),
+    }
+    const txIntentDto = toDisbursementTxIntentDto(txIntentInput)
+    assertNoForbiddenKeys(txIntentDto)
+    expect(disbursementTxIntentDtoSchema.parse(txIntentDto)).toEqual(txIntentDto)
   })
 })
 

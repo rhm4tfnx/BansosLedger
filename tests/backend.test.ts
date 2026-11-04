@@ -244,7 +244,7 @@ test.each(['OPERATOR', 'KECAMATAN', 'DINAS_SOSIAL', 'anonymous'] as const)('ever
   expect(endpoints.length).toBeGreaterThanOrEqual(55)
   for (const endpoint of endpoints) {
     if (endpoint.permission) {
-      const monitoringRead = endpoint.method === 'GET' || endpoint.file.includes('reveal-nik')
+      const monitoringRead = endpoint.method === 'GET' || endpoint.file.includes('reveal-nik') || endpoint.file === 'recipients/search/route.ts'
       const allowed = role !== 'anonymous' && (role === 'OPERATOR' || monitoringRead)
       const result = await requireV1(endpoint.permission)
       expect(result.response?.status ?? 200, `${endpoint.method} ${endpoint.file}`).toBe(allowed ? 200 : role === 'anonymous' ? 401 : 403)

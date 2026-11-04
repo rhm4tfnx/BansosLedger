@@ -46,6 +46,7 @@ Setiap respons error pada API v1 mengikuti spesifikasi RFC 9457 (`application/pr
 | `InvalidWallet` | 400 | Alamat wallet tidak valid. |
 | `MISMATCH` | 409 | Data transaksi tidak cocok dengan catatan penyaluran. |
 | `MULTIPART_REQUIRED` | 400 | Gunakan multipart/form-data. |
+| `NIK_IN_QUERY` | 400 | NIK tidak boleh dikirim melalui URL; gunakan pencarian POST. |
 | `NOT_ENROLLED` | 409 | Penerima belum terdaftar dalam program. |
 | `NOT_FOUND` | 404 | Data tidak ditemukan. |
 | `NotAuthorized` | 403 | Wallet yang dipakai bukan wallet resmi Kelurahan. Ganti akun di MetaMask. |

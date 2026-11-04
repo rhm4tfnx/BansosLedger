@@ -17,6 +17,8 @@ import {
   programEnrollmentItemDtoSchema,
   disbursementDtoSchema,
   disbursementCreatedDtoSchema,
+  disbursementPreflightDtoSchema,
+  disbursementTxIntentDtoSchema,
   evidenceDtoSchema,
   auditLogDtoSchema,
   realizationReportDtoSchema,
@@ -61,11 +63,13 @@ import { POST as authWalletNonceRoute } from '@/app/api/v1/auth/wallet/nonce/rou
 import { POST as cronReconcileRoute } from '@/app/api/v1/cron/reconcile/route'
 import { GET as getDashboardSummary } from '@/app/api/v1/dashboard/summary/route'
 import { GET as listDisbursements, POST as createDisbursement } from '@/app/api/v1/disbursements/route'
+import { POST as preflightDisbursementRoute } from '@/app/api/v1/disbursements/preflight/route'
 import { GET as getDisbursement, DELETE as deleteDisbursement } from '@/app/api/v1/disbursements/[id]/route'
 import { POST as confirmDisbursement } from '@/app/api/v1/disbursements/[id]/confirm/route'
 import { GET as getPublicEvidence } from '@/app/api/v1/disbursements/[id]/evidence/route'
 import { POST as withdrawEvidenceRoute } from '@/app/api/v1/disbursements/[id]/evidence/[cid]/withdraw/route'
 import { POST as retryDisbursement } from '@/app/api/v1/disbursements/[id]/retry/route'
+import { POST as txIntentDisbursementRoute } from '@/app/api/v1/disbursements/[id]/tx-intent/route'
 import { PATCH as submitDisbursementTx } from '@/app/api/v1/disbursements/[id]/tx-submitted/route'
 import { GET as explorerAddressRoute } from '@/app/api/v1/explorer/address/[addr]/route'
 import { GET as explorerBlocksRoute } from '@/app/api/v1/explorer/blocks/route'
@@ -89,6 +93,7 @@ import { GET as publicProgramRoute } from '@/app/api/v1/public/programs/[code]/r
 import { POST as publicStatusCheckRoute } from '@/app/api/v1/public/status-check/route'
 import { GET as publicSummaryRoute } from '@/app/api/v1/public/summary/route'
 import { GET as listRecipients, POST as createRecipient } from '@/app/api/v1/recipients/route'
+import { POST as searchRecipientsRoute } from '@/app/api/v1/recipients/search/route'
 import { GET as getRecipient, PATCH as updateRecipient, DELETE as deleteRecipient } from '@/app/api/v1/recipients/[id]/route'
 import { POST as finalizeRecipient } from '@/app/api/v1/recipients/[id]/finalize/route'
 import { POST as revealNik } from '@/app/api/v1/recipients/[id]/reveal-nik/route'
@@ -636,6 +641,91 @@ describe('API Contract V1 - Route Responses Match Zod DTO Schemas', () => {
     expect(statusRes.status).toBe(200)
     const statusData = await statusRes.json()
     expect(publicStatusCheckDtoSchema.parse(statusData)).toEqual(statusData)
+  })
+
+  test('Part 5C endpoints (preflight, tx-intent, recipients/search) return valid DTOs', async () => {
+    vi.spyOn(chainVerifier, 'walletStatus').mockResolvedValue({
+      authorizedWallet: contract,
+      owner: contract,
+      chainId: 1337,
+      paused: false,
+      networkOk: true,
+    })
+
+    const rec = await Recipients.create({
+      nikEnc: encryptNik(nik),
+      nikBlindIndex: nikBlindIndex(nik),
+      nikMasked: '7305••••••••0001',
+      name: 'Warga Kontrak 5C',
+      address: { dusun: 'Dusun I', rt: '01', rw: '01' },
+      status: 'FINAL',
+      commitment: recipientCommitment(nik),
+    })
+    const prog = await Programs.create({
+      code: 'BLT-5C',
+      programId: '0x' + '2'.repeat(64),
+      name: 'Program Kontrak 5C',
+      fundSource: 'APBD',
+      kind: 'TUNAI',
+      amountPerRecipient: 300000,
+      totalBudget: 3000000,
+      startPeriod: 202601,
+      endPeriod: 202612,
+      status: 'ACTIVE',
+      isPublic: true,
+    })
+    await Enrollments.create({
+      programId: prog._id,
+      recipientId: rec._id,
+      status: 'REGISTERED_ONCHAIN',
+    })
+
+    // POST /api/v1/disbursements/preflight
+    const preflightRes = await preflightDisbursementRoute(
+      req({ programId: String(prog._id), period: 202605, recipientId: String(rec._id) }, 'POST', '/api/v1/disbursements/preflight'),
+    )
+    expect(preflightRes.status).toBe(200)
+    const preflightBody = await preflightRes.json()
+    expect(disbursementPreflightDtoSchema.parse(preflightBody)).toEqual(preflightBody)
+
+    // POST /api/v1/disbursements/:id/tx-intent
+    const disb = await Disbursements.create({
+      refId: '0x' + '9'.repeat(64),
+      programId: prog._id,
+      recipientId: rec._id,
+      periodId: 202605,
+      commitment: rec.commitment,
+      amount: 300000,
+      disbursedDate: new Date('2026-05-15T00:00:00Z'),
+      note: 'Tahap Mei',
+      status: 'DRAFT',
+      evidence: [
+        {
+          cid: 'bafy' + 'a'.repeat(50),
+          mime: 'application/pdf',
+          size: 1024,
+          sha256: 'b'.repeat(64),
+          name: 'bukti.pdf',
+          access: 'PUBLIC',
+          status: 'ACTIVE',
+        },
+      ],
+    })
+    const intentRes = await txIntentDisbursementRoute(
+      req({}, 'POST', `/api/v1/disbursements/${disb._id}/tx-intent`),
+      { params: Promise.resolve({ id: String(disb._id) }) },
+    )
+    expect(intentRes.status).toBe(200)
+    const intentBody = await intentRes.json()
+    expect(disbursementTxIntentDtoSchema.parse(intentBody)).toEqual(intentBody)
+
+    // POST /api/v1/recipients/search
+    const searchRes = await searchRecipientsRoute(
+      req({ nik }, 'POST', '/api/v1/recipients/search'),
+    )
+    expect(searchRes.status).toBe(200)
+    const searchBody = await searchRes.json()
+    expect(listEnvelope(recipientDtoSchema).parse(searchBody)).toEqual(searchBody)
   })
 
   test('v1.ts security and error handling behaviors', async () => {

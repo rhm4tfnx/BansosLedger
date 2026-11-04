@@ -31,6 +31,7 @@ export const ERROR_CATALOG = {
   // Recipients
   DUPLICATE_NIK: { status: 409, message: 'NIK sudah terdaftar.' },
   REVEAL_LIMIT: { status: 429, message: 'Batas pembukaan NIK tercapai.' },
+  NIK_IN_QUERY: { status: 400, message: 'NIK tidak boleh dikirim melalui URL; gunakan pencarian POST.' },
 
   // Programs
   INVALID_PERIOD_RANGE: { status: 400, message: 'Rentang periode tidak valid.' },

@@ -3,14 +3,24 @@ import { z } from 'zod'
 import { createHash } from 'node:crypto'
 import { Types, type FilterQuery, type PipelineStage } from 'mongoose'
 import { Programs, Recipients, Enrollments, Disbursements } from '@/lib/db/models'
+import { ledgerInterface } from '@/lib/blockchain/abi'
 import { refIdFromDataId, periodIdFromYYYYMM } from '@/lib/blockchain/chain-keys'
+import { expectedWallet } from '@/lib/auth/expected-wallet'
+import { getEnv } from '@/lib/env'
 import { canonicalJSON } from '@/modules/audit/service'
 import { assertDeadline } from '@/modules/chain/config'
 import { chainVerifier, chainMessage, type Receipt } from '../chain/verifier'
-import { toDisbursementDto, toDisbursementCreatedDto } from './dto'
+import {
+  toDisbursementDto,
+  toDisbursementCreatedDto,
+  toDisbursementPreflightDto,
+  toDisbursementTxIntentDto,
+  type PreflightCheckInput,
+} from './dto'
 import { audit, body, conflict, DomainError, duplicate, idSchema, json, notFound, oid, pageQuery, periodSchema, query, reasonSchema, txSchema, type DomainContext } from '../domain/http'
 
 export const disbursementInput = z.object({ programId: idSchema, period: periodSchema, recipientId: idSchema, disbursedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => { const date = new Date(value); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value }), note: z.string().trim().max(2000).default('') }).strict()
+export const preflightInput = z.object({ programId: idSchema, period: periodSchema, recipientId: idSchema }).strict()
 export const disbursementProjection = '-idempotencyKey -requestHash -evidenceLease -evidence.pinataId'
 export function duplicateDisbursement(error: unknown): never { if (duplicate(error)) conflict('AlreadyDisbursed', chainMessage('AlreadyDisbursed')); throw error }
 function availableEvidence() { return { $or: [{ 'evidenceLease.token': { $exists: false } }, { 'evidenceLease.expiresAt': { $lte: new Date() } }] } }
@@ -50,18 +60,167 @@ function disbursementEnrichmentStages(): PipelineStage.FacetPipelineStage[] {
     },
   ]
 }
-export async function prevalidate(programId: Types.ObjectId, recipientId: Types.ObjectId, period: number, excludeId?: Types.ObjectId) {
+export function checkProgramActive(program: { status?: string | null } | null | undefined): boolean {
+  return Boolean(program && program.status === 'ACTIVE')
+}
+
+export function checkPeriodInRange(
+  program: { startPeriod?: number | null; endPeriod?: number | null } | null | undefined,
+  period: number,
+): boolean {
+  return Boolean(
+    program &&
+      typeof program.startPeriod === 'number' &&
+      typeof program.endPeriod === 'number' &&
+      period >= program.startPeriod &&
+      period <= program.endPeriod,
+  )
+}
+
+export function checkRecipientRegisteredOnChain(enrollment: unknown): boolean {
+  return Boolean(enrollment)
+}
+
+export function checkNoDuplicateDisbursement(existing: unknown): boolean {
+  return !existing
+}
+
+export function checkAmountMatchesProgram(
+  program: { amountPerRecipient?: number | null } | null | undefined,
+  candidateAmount?: number | null,
+): boolean {
+  return Boolean(
+    program &&
+      typeof program.amountPerRecipient === 'number' &&
+      Number.isSafeInteger(program.amountPerRecipient) &&
+      program.amountPerRecipient > 0 &&
+      candidateAmount === program.amountPerRecipient,
+  )
+}
+
+export function checkRecipientFinalWithCommitment(
+  recipient: { status?: string | null; deletedAt?: Date | null; commitment?: string | null } | null | undefined,
+): boolean {
+  return Boolean(
+    recipient &&
+      (recipient.status ?? 'FINAL') === 'FINAL' &&
+      !recipient.deletedAt &&
+      typeof recipient.commitment === 'string' &&
+      /^0x[0-9a-fA-F]{64}$/.test(recipient.commitment),
+  )
+}
+
+export function checkAuthorizedKelurahanWallet(
+  actor: { walletVerified?: boolean; boundWalletAddress?: string | null },
+  authorizedWallet: string | null | undefined,
+): boolean {
+  return Boolean(
+    actor.walletVerified &&
+      typeof actor.boundWalletAddress === 'string' &&
+      typeof authorizedWallet === 'string' &&
+      authorizedWallet.length > 0 &&
+      actor.boundWalletAddress.toLowerCase() === authorizedWallet.toLowerCase(),
+  )
+}
+
+async function resolveAuthorizedWallet(): Promise<string | null> {
+  try {
+    const status = await chainVerifier.walletStatus()
+    if (status.authorizedWallet) return status.authorizedWallet
+  } catch {
+    // Fallback to expectedWallet when full walletStatus RPC is unavailable
+  }
+  try {
+    return await expectedWallet()
+  } catch {
+    return null
+  }
+}
+
+function buildPreflightCheck(
+  key: PreflightCheckInput['key'],
+  label: string,
+  ok: boolean,
+  errorCode: string,
+): PreflightCheckInput {
+  return ok ? { key, label, ok: true } : { key, label, ok: false, message: chainMessage(errorCode) }
+}
+
+export async function prevalidate(
+  programId: Types.ObjectId,
+  recipientId: Types.ObjectId,
+  period: number,
+  excludeId?: Types.ObjectId,
+  expectedAmount?: number | null,
+) {
   const program = await Programs.findById(programId).lean()
   if (!program) notFound()
-  if (program.status !== 'ACTIVE') conflict('ProgramClosed', chainMessage('ProgramClosed'))
-  if (!program.startPeriod || !program.endPeriod || period < program.startPeriod || period > program.endPeriod) conflict('PeriodOutOfRange', chainMessage('PeriodOutOfRange'))
+  if (!checkProgramActive(program)) conflict('ProgramClosed', chainMessage('ProgramClosed'))
+  if (!checkPeriodInRange(program, period)) conflict('PeriodOutOfRange', chainMessage('PeriodOutOfRange'))
   const enrollment = await Enrollments.exists({ programId, recipientId, status: 'REGISTERED_ONCHAIN' })
-  if (!enrollment) conflict('RecipientNotRegistered', chainMessage('RecipientNotRegistered'))
+  if (!checkRecipientRegisteredOnChain(enrollment)) conflict('RecipientNotRegistered', chainMessage('RecipientNotRegistered'))
   const existing = await Disbursements.exists({ programId, recipientId, periodId: period, status: { $in: ['PENDING', 'SUCCESS'] }, ...(excludeId ? { _id: { $ne: excludeId } } : {}) })
-  if (existing) conflict('AlreadyDisbursed', chainMessage('AlreadyDisbursed'))
-  const recipient = await Recipients.findOne({ _id: recipientId, status: 'FINAL', deletedAt: null }).select('commitment name nikMasked').lean()
-  if (!recipient?.commitment) conflict('RecipientNotRegistered', chainMessage('RecipientNotRegistered'))
-  return { program, recipient }
+  if (!checkNoDuplicateDisbursement(existing)) conflict('AlreadyDisbursed', chainMessage('AlreadyDisbursed'))
+  if (!checkAmountMatchesProgram(program, expectedAmount ?? program.amountPerRecipient)) conflict('AmountMismatch', chainMessage('AmountMismatch'))
+  const recipient = await Recipients.findOne({ _id: recipientId, status: 'FINAL', deletedAt: null }).select('commitment name nikMasked status deletedAt').lean()
+  if (!checkRecipientFinalWithCommitment(recipient)) conflict('RecipientNotRegistered', chainMessage('RecipientNotRegistered'))
+  return { program, recipient: recipient! }
+}
+
+// TODO(PRD §12): Non-persisting preflight check endpoint for disbursement wizard.
+export async function preflight(ctx: DomainContext) {
+  const input = await body(ctx.request, preflightInput)
+  const programId = oid(input.programId)
+  const recipientId = oid(input.recipientId)
+  const period = periodIdFromYYYYMM(input.period)
+  const [program, enrollment, existingDuplicate, existingDraft, recipient, authorizedWallet] = await Promise.all([
+    Programs.findById(programId).lean(),
+    Enrollments.exists({ programId, recipientId, status: 'REGISTERED_ONCHAIN' }),
+    Disbursements.exists({ programId, recipientId, periodId: period, status: { $in: ['PENDING', 'SUCCESS'] } }),
+    Disbursements.findOne({ programId, recipientId, periodId: period, status: 'DRAFT', deletedAt: null }).select('amount').lean(),
+    Recipients.findOne({ _id: recipientId, status: 'FINAL', deletedAt: null }).select('commitment name nikMasked status deletedAt').lean(),
+    resolveAuthorizedWallet(),
+  ])
+  const candidateAmount = existingDraft ? existingDraft.amount : program?.amountPerRecipient
+  const checks: PreflightCheckInput[] = [
+    buildPreflightCheck('program_active', 'Program aktif', checkProgramActive(program), 'ProgramClosed'),
+    buildPreflightCheck('period_in_range', 'Periode dalam rentang program', checkPeriodInRange(program, period), 'PeriodOutOfRange'),
+    buildPreflightCheck('recipient_registered', 'Penerima terdaftar on-chain', checkRecipientRegisteredOnChain(enrollment), 'RecipientNotRegistered'),
+    buildPreflightCheck('no_duplicate', 'Duplikasi periode', checkNoDuplicateDisbursement(existingDuplicate), 'AlreadyDisbursed'),
+    buildPreflightCheck('amount_matches_program', 'Kesesuaian nominal', checkAmountMatchesProgram(program, candidateAmount), 'AmountMismatch'),
+    buildPreflightCheck('recipient_final_commitment', 'Status FINAL & commitment penerima', checkRecipientFinalWithCommitment(recipient), 'RecipientNotRegistered'),
+    buildPreflightCheck('authorized_wallet', 'Kewenangan wallet Kelurahan', checkAuthorizedKelurahanWallet(ctx.actor, authorizedWallet), 'NotAuthorized'),
+  ]
+  const ok = checks.every(check => check.ok)
+  return json(toDisbursementPreflightDto({ ok, checks }))
+}
+
+// TODO(PRD §12): Server-side calldata encoding for recordDisbursement transaction intent.
+export async function txIntent(ctx: DomainContext) {
+  await body(ctx.request, z.object({}).strict())
+  const row = await Disbursements.findOne({ _id: oid(ctx.params.id), deletedAt: null }).lean()
+  if (!row) notFound()
+  if (row.status !== 'DRAFT') conflict()
+  const activeEvidence = row.evidence.find(item => item.status === 'ACTIVE' && Boolean(item.cid))
+  if (!activeEvidence?.cid) conflict('EVIDENCE_REQUIRED', 'Minimal satu bukti aktif wajib diunggah.')
+  const { program } = await prevalidate(row.programId, row.recipientId, row.periodId!, row._id, row.amount)
+  if (!program.programId || !row.commitment || row.periodId == null || row.amount == null) {
+    conflict('IMMUTABLE_RECORD', 'Data penyaluran belum lengkap untuk penandatanganan transaksi.')
+  }
+  const to = getEnv('NEXT_PUBLIC_CONTRACT_ADDRESS')
+  const chainId = getEnv('NEXT_PUBLIC_CHAIN_ID')
+  if (!to || !chainId) throw new DomainError(503, 'CHAIN_NOT_CONFIGURED', 'Blockchain belum dikonfigurasi.')
+  const data = ledgerInterface.encodeFunctionData('recordDisbursement', [
+    {
+      refId: row.refId,
+      programId: program.programId,
+      periodId: row.periodId,
+      recipientCommitment: row.commitment,
+      amount: BigInt(row.amount),
+      evidenceCid: activeEvidence.cid,
+    },
+  ])
+  return json(toDisbursementTxIntentDto({ to, data, chainId, evidenceCid: activeEvidence.cid }))
 }
 function preview(row: { refId: string; periodId?: number | null; commitment?: string | null; amount?: number | null }, chainProgramId?: string | null) {
   return { refId: row.refId, programId: chainProgramId, periodId: row.periodId, commitment: row.commitment, amount: row.amount }
@@ -155,7 +314,7 @@ export async function submitted(ctx: DomainContext) {
   const { txHash } = await body(ctx.request, z.object({ txHash: txSchema }).strict())
   const row = await Disbursements.findOne({ _id: oid(ctx.params.id), deletedAt: null }).lean(); if (!row) notFound()
   if (row.status !== 'DRAFT') conflict()
-  const { program, recipient } = await prevalidate(row.programId, row.recipientId, row.periodId!, row._id)
+  const { program, recipient } = await prevalidate(row.programId, row.recipientId, row.periodId!, row._id, row.amount)
   if (!row.evidence.some(item => item.status === 'ACTIVE')) conflict('EVIDENCE_REQUIRED', 'Minimal satu bukti aktif wajib diunggah.')
   let updated
   try {
@@ -194,7 +353,7 @@ export async function retry(ctx: DomainContext) {
   await body(ctx.request, z.object({}).strict())
   const row = await Disbursements.findOne({ _id: oid(ctx.params.id), status: 'FAILED', deletedAt: null }).lean()
   if (!row) conflict()
-  const { program, recipient } = await prevalidate(row.programId, row.recipientId, row.periodId!, row._id)
+  const { program, recipient } = await prevalidate(row.programId, row.recipientId, row.periodId!, row._id, row.amount)
   let updated
   try { updated = await Disbursements.findOneAndUpdate({ _id: row._id, status: 'FAILED', deletedAt: null, ...availableEvidence() }, { $set: { status: 'DRAFT' }, $unset: { chain: 1, lastError: 1 }, $push: { attempts: { at: new Date(), outcome: 'RETRY', by: ctx.actor.userId } } }, { new: true }).select(disbursementProjection).lean() } catch (error) { duplicateDisbursement(error) }
   if (!updated) conflict()
