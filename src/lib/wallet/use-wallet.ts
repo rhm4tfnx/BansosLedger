@@ -388,6 +388,43 @@ export function useWallet(options: UseWalletOptions = {}) {
     [clearWalletFeedback, setPendingTx, setRejected, setWalletError],
   )
 
+  const signMessage = useCallback(
+    async (message: string, signerAddress?: string | null): Promise<string> => {
+      const ethereum = getBrowserEthereum()
+      if (!ethereum) {
+        throw new Error('MetaMask tidak tersedia.')
+      }
+      const targetAddress = signerAddress ?? useWalletStore.getState().address
+      if (!targetAddress) {
+        throw new Error('Hubungkan wallet terlebih dahulu.')
+      }
+
+      clearWalletFeedback()
+      try {
+        const signatureRaw: unknown = await ethereum.request({
+          method: 'personal_sign',
+          params: [message, targetAddress],
+        })
+        if (typeof signatureRaw !== 'string' || !signatureRaw) {
+          throw new Error('Tanda tangan pesan tidak valid dari wallet.')
+        }
+        return signatureRaw
+      } catch (err) {
+        if (isUserRejectedWalletError(err)) {
+          setRejected(WALLET_USER_REJECTED_MESSAGE)
+          throw new Error(WALLET_USER_REJECTED_MESSAGE)
+        }
+        const errMessage =
+          err instanceof Error && err.message
+            ? err.message
+            : 'Gagal menandatangani pesan di wallet.'
+        setWalletError(errMessage)
+        throw err
+      }
+    },
+    [clearWalletFeedback, setRejected, setWalletError],
+  )
+
   const clearPendingTx = useCallback(() => {
     setPendingTx(null)
   }, [setPendingTx])
@@ -404,6 +441,7 @@ export function useWallet(options: UseWalletOptions = {}) {
     connect,
     ensureChain,
     sendIntent,
+    signMessage,
     clearPendingTx,
     clearWalletFeedback,
     refreshWallet: inspectWallet,

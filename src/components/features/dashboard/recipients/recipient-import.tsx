@@ -1,198 +1,227 @@
 'use client'
-import { useMemo, useState } from 'react'
-import Papa from 'papaparse'
-import { Upload } from 'lucide-react'
+
+import { useState } from 'react'
 import { RecipientDialog } from '@/components/features/dashboard/recipients/recipient-dialog'
-import {
-  type Recipient,
-  initialRecipients,
-  validateRecipient,
-  masked,
-  money,
-} from '@/mocks/recipient-data'
+import { isValidNikFormat } from '@/components/features/dashboard/recipients/recipient-form'
+import { formatApiError } from '@/lib/api/errors'
+import { useCreateRecipientMutation } from '@/lib/api/hooks/recipients'
 import s from '@/components/features/dashboard/recipients/recipients.module.css'
+
+function maskNikLocal(nik: string): string {
+  return nik.length === 16 ? `${nik.slice(0, 4)}${'•'.repeat(8)}${nik.slice(12)}` : 'Tidak valid'
+}
+
+const MAX_BYTES = 1024 * 1024
+const MAX_ROWS = 500
+const HEADER = 'nik,name,dusun,rt,rw,phone'
+
+interface ParsedCsvRow {
+  row: number
+  nik: string
+  name: string
+  dusun: string
+  rt: string
+  rw: string
+  phone?: string
+  error?: string
+}
+
+function parseLine(line: string): string[] | null {
+  const out: string[] = []
+  let cur = ''
+  let q = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (q) {
+      if (c === '"' && line[i + 1] === '"') {
+        cur += '"'
+        i++
+      } else if (c === '"') {
+        q = false
+      } else {
+        cur += c
+      }
+    } else if (c === '"') {
+      q = true
+    } else if (c === ',') {
+      out.push(cur.trim())
+      cur = ''
+    } else {
+      cur += c
+    }
+  }
+  return q ? null : [...out, cur.trim()]
+}
+
 export function RecipientImport({
-  existing,
-  onSave,
   onClose,
+  onImported,
 }: {
-  existing: Recipient[]
-  onSave: (rows: Recipient[]) => void
   onClose: () => void
+  onImported?: (count: number) => void
 }) {
-  const [rows, setRows] = useState<Recipient[]>([])
-  const [error, setError] = useState('')
-  const checked = useMemo(() => {
-    const seen: string[] = []
-    return rows.map((r) => {
-      const error = validateRecipient(r, existing, seen)
-      seen.push(r.nik)
-      return { row: r, error }
-    })
-  }, [rows, existing])
-  const valid = checked.filter((x) => !x.error).map((x) => x.row)
-  function sample() {
-    const base = initialRecipients[7]
-    setError('')
+  const createMutation = useCreateRecipientMutation()
+  const [rows, setRows] = useState<ParsedCsvRow[]>([])
+  const [fileError, setFileError] = useState('')
+  const [importing, setImporting] = useState(false)
+
+  const valid = rows.filter((r) => !r.error)
+  const invalid = rows.filter((r) => r.error)
+
+  async function handleFile(f?: File) {
+    setFileError('')
+    setRows([])
+    if (!f) return
+    if (!f.name.toLowerCase().endsWith('.csv') || (f.type && !['text/csv', 'text/plain'].includes(f.type))) {
+      setFileError('Gunakan berkas CSV (.csv).')
+      return
+    }
+    if (f.size > MAX_BYTES) {
+      setFileError('Ukuran berkas melebihi 1 MB.')
+      return
+    }
+    const lines = (await f.text())
+      .replace(/^\ufeff/, '')
+      .split(/\r?\n/)
+      .filter((l) => l.trim())
+    if (lines.length < 2) {
+      setFileError('Berkas CSV kosong.')
+      return
+    }
+    if (lines.length - 1 > MAX_ROWS) {
+      setFileError(`Maksimal ${MAX_ROWS} baris per impor.`)
+      return
+    }
+    if ((parseLine(lines[0]) || []).join(',').toLowerCase() !== HEADER) {
+      setFileError(`Header wajib: ${HEADER}`)
+      return
+    }
+    const seen = new Set<string>()
     setRows(
-      ['0000999900000001', '0000999900000002', '123', existing[0].nik, '0000999900000001'].map(
-        (nik, i) => ({
-          ...base,
-          id: crypto.randomUUID(),
+      lines.slice(1).map((line, i) => {
+        const cols = parseLine(line)
+        const [nik = '', name = '', dusun = '', rt = '', rw = '', phone = ''] = cols || []
+        const errs: string[] = []
+        if (!cols || cols.length !== 6) errs.push('Format kolom tidak valid')
+        if (!isValidNikFormat(nik)) errs.push('NIK 16 digit tidak valid')
+        else if (seen.has(nik)) errs.push('NIK duplikat di berkas')
+        seen.add(nik)
+        if (!name || name.length < 2) errs.push('Nama wajib diisi')
+        if (!dusun) errs.push('Dusun wajib diisi')
+        if (!/^\d{1,3}$/.test(rt) || !/^\d{1,3}$/.test(rw)) errs.push('RT/RW harus 1–3 digit angka')
+        if (phone && !/^\+?[0-9 -]{7,20}$/.test(phone)) errs.push('Nomor telepon tidak valid')
+        return {
+          row: i + 2,
           nik,
-          name: `Penerima Impor Contoh ${i + 1}`,
-          status: 'DRAFT',
-          deleted: false,
-        }),
-      ),
+          name,
+          dusun,
+          rt,
+          rw,
+          phone: phone || undefined,
+          error: errs.join('; ') || undefined,
+        }
+      }),
     )
   }
+
+  async function importValidRows() {
+    if (!valid.length || importing) return
+    setImporting(true)
+    setFileError('')
+    let importedCount = 0
+    try {
+      for (const r of valid) {
+        await createMutation.mutateAsync({
+          nik: r.nik,
+          name: r.name,
+          address: { dusun: r.dusun, rt: r.rt, rw: r.rw },
+          ...(r.phone ? { phone: r.phone } : {}),
+        })
+        importedCount++
+      }
+      onImported?.(importedCount)
+      onClose()
+    } catch (err) {
+      setFileError(formatApiError(err).message)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <RecipientDialog
-      title="Impor CSV Data Penerima dengan Pratinjau Validasi"
-      subtitle="Periksa NIK 16 digit, duplikasi data dan duplikasi internal CSV sebelum menyimpan sebagai DRAFT."
-      onClose={onClose}
+      title="Impor Penerima dari CSV"
+      subtitle="Maksimal 500 baris (1 MB). Baris valid disimpan sebagai DRAFT."
+      onClose={() => {
+        if (!importing) onClose()
+      }}
     >
       <div className={s.formBody}>
-        <div className={s.uploadBox}>
-          <div>
-            <strong>Pilih Berkas CSV atau Gunakan Data Simulasi Uji</strong>
-            <p>Format kolom (maksimal 1 MB / 1.000 baris)</p>
-            <code>NIK,Nama,NoKK,Wilayah,Alamat,Pekerjaan,Penghasilan,Program,Tanggungan</code>
-          </div>
-          <div className={s.actions}>
-            <label className={s.upload}>
-              <Upload size={16} /> Unggah File .CSV
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0]
-                  if (!f) return
-                  setRows([])
-                  if (f.size > 1048576) {
-                    setError('Ukuran file maksimal 1 MB')
-                    return
-                  }
-                  const parsed = Papa.parse<Record<string, string>>(await f.text(), {
-                    header: true,
-                    skipEmptyLines: 'greedy',
-                    transformHeader: (h) => h.trim().replace(/^\uFEFF/, ''),
-                  })
-                  if (
-                    parsed.errors.length ||
-                    ![
-                      'NIK',
-                      'Nama',
-                      'NoKK',
-                      'Wilayah',
-                      'Alamat',
-                      'Pekerjaan',
-                      'Penghasilan',
-                      'Program',
-                      'Tanggungan',
-                    ].every((k) => parsed.meta.fields?.includes(k)) ||
-                    parsed.data.length > 1000
-                  ) {
-                    setError(
-                      'CSV tidak valid. Periksa nama kolom, jumlah baris, dan format kutipan.',
-                    )
-                    return
-                  }
-                  setError('')
-                  setRows(
-                    parsed.data.map((r) => ({
-                      id: crypto.randomUUID(),
-                      nik: r.NIK.trim(),
-                      name: r.Nama.trim(),
-                      kk: r.NoKK.trim(),
-                      region: r.Wilayah.trim(),
-                      address: r.Alamat.trim(),
-                      job: r.Pekerjaan.trim(),
-                      income: r.Penghasilan.trim() ? Number(r.Penghasilan) : NaN,
-                      program: r.Program.trim(),
-                      dependents: r.Tanggungan.trim() ? Number(r.Tanggungan) : NaN,
-                      status: 'DRAFT',
-                      deleted: false,
-                      received: 0,
-                    })),
-                  )
-                }}
-              />
-            </label>
-            <button className={s.primary} onClick={sample}>
-              Muat 5 Baris Sampel CSV (Valid + Error + Duplikat)
-            </button>
-          </div>
-        </div>
-        {error && (
-          <p role="alert" className={s.error}>
-            {error}
+        <label className={s.dropzone}>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            disabled={importing}
+            onChange={(e) => void handleFile(e.target.files?.[0])}
+          />
+          <strong>Pilih berkas CSV (.csv, maks. 1 MB)</strong>
+          <small>Kolom wajib: {HEADER}</small>
+        </label>
+        {fileError && (
+          <p role="alert" className={s.errorText}>
+            {fileError}
           </p>
         )}
-        <div className={s.importStats}>
-          <div>
-            Total Baris Diperiksa<strong>{rows.length}</strong>
-          </div>
-          <div>
-            Valid (Siap Simpan DRAFT)<strong>{valid.length}</strong>
-          </div>
-          <div>
-            Ditolak (Format / Duplikat)<strong>{rows.length - valid.length}</strong>
-          </div>
-        </div>
-        <div className={s.tableWrap}>
-          <table>
-            <thead>
-              <tr>
-                {[
-                  '#',
-                  'NIK (16 DIGIT)',
-                  'NAMA LENGKAP',
-                  'WILAYAH & PROGRAM',
-                  'PENGHASILAN',
-                  'HASIL VALIDASI PRA-IMPOR',
-                ].map((t) => (
-                  <th key={t}>{t}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {checked.map(({ row: r, error }, i) => (
-                <tr key={r.id}>
-                  <td>{i + 1}</td>
-                  <td>
-                    <code>{masked(r.nik)}</code>
-                  </td>
-                  <td>{r.name}</td>
-                  <td>
-                    {r.region}
-                    <small>{r.program}</small>
-                  </td>
-                  <td>{Number.isFinite(r.income) ? money(r.income) : '—'}</td>
-                  <td className={error ? s.error : s.success}>
-                    {error || 'Valid — siap disimpan'}
-                  </td>
-                </tr>
-              ))}
-              {!rows.length && (
-                <tr>
-                  <td colSpan={6} className={s.empty}>
-                    Muat sampel CSV atau unggah berkas untuk melihat pratinjau validasi.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {!!rows.length && (
+          <>
+            <p>
+              <strong>{valid.length}</strong> baris valid siap diimpor sebagai DRAFT ·{' '}
+              <strong>{invalid.length}</strong> baris ditolak.
+            </p>
+            <div className={s.tableWrap}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Baris</th>
+                    <th>Nama</th>
+                    <th>NIK (Tersamar)</th>
+                    <th>Domisili</th>
+                    <th>Validasi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, 20).map((r) => (
+                    <tr key={r.row}>
+                      <td>{r.row}</td>
+                      <td>{r.name || '-'}</td>
+                      <td>
+                        <code>{maskNikLocal(r.nik)}</code>
+                      </td>
+                      <td>
+                        {r.dusun || '-'} RT {r.rt}/RW {r.rw}
+                      </td>
+                      <td className={r.error ? s.errorText : s.success}>{r.error || 'Valid'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+        <footer className={s.dialogFooter}>
+          <button type="button" disabled={importing} onClick={onClose}>
+            Batal
+          </button>
+          <button
+            type="button"
+            className={s.primary}
+            disabled={!valid.length || importing}
+            onClick={() => void importValidRows()}
+          >
+            {importing ? 'Mengimpor…' : `Impor ${valid.length} Baris Valid`}
+          </button>
+        </footer>
       </div>
-      <footer>
-        <p>Hanya baris valid disimpan sementara sebagai DRAFT.</p>
-        <button onClick={onClose}>Tutup</button>
-        <button className={s.primary} disabled={!valid.length} onClick={() => onSave(valid)}>
-          Simpan Baris Valid sebagai DRAFT ({valid.length})
-        </button>
-      </footer>
     </RecipientDialog>
   )
 }

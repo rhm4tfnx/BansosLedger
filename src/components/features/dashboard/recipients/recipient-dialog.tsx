@@ -16,11 +16,31 @@ export function RecipientDialog({
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     const el = ref.current
-    el?.showModal()
+    if (el) {
+      if (typeof el.showModal === 'function') {
+        try {
+          el.showModal()
+        } catch {
+          el.setAttribute('open', '')
+        }
+      } else {
+        el.setAttribute('open', '')
+      }
+    }
     const old = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
-      el?.close()
+      if (el) {
+        if (typeof el.close === 'function') {
+          try {
+            el.close()
+          } catch {
+            el.removeAttribute('open')
+          }
+        } else {
+          el.removeAttribute('open')
+        }
+      }
       document.body.style.overflow = old
     }
   }, [])

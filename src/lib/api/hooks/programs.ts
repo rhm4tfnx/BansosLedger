@@ -68,7 +68,12 @@ export function useProgramsQuery(filters: ProgramsQueryFilters = {}) {
   })
 }
 
-export function useProgramDetailQuery(id: string | null | undefined, enabled = true) {
+export function useProgramDetailQuery(
+  id: string | null | undefined,
+  options: boolean | { enabled?: boolean; refetchInterval?: number | false } = true,
+) {
+  const enabled = typeof options === 'boolean' ? options : (options.enabled ?? true)
+  const refetchInterval = typeof options === 'boolean' ? undefined : options.refetchInterval
   return useQuery<ProgramDetailViewModel, ApiClientError>({
     queryKey: queryKeys.programs.detail(id ?? ''),
     queryFn: async ({ signal }) => {
@@ -79,6 +84,7 @@ export function useProgramDetailQuery(id: string | null | undefined, enabled = t
       return toProgramDetailViewModel(dto)
     },
     enabled: Boolean(id) && enabled,
+    refetchInterval,
   })
 }
 

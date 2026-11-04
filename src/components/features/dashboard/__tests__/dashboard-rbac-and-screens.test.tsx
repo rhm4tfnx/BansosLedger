@@ -107,7 +107,7 @@ function renderForRole(ui: React.ReactElement, role: Role, enableSessionQuery = 
 }
 
 describe('Role-based action visibility & Part B read-only screens', () => {
-  it('shows disabled write buttons with Part B tooltip for OPERATOR_KELURAHAN and hides them for KECAMATAN / DINAS_SOSIAL', async () => {
+  it('shows enabled write buttons for OPERATOR_KELURAHAN and hides them for KECAMATAN / DINAS_SOSIAL', async () => {
     server.use(
       http.get('*/api/v1/programs', () =>
         HttpResponse.json({ data: [], total: 0, page: 1, limit: 100, totalPages: 1 }),
@@ -172,11 +172,9 @@ describe('Role-based action visibility & Part B read-only screens', () => {
       expect(screen.getByText('Baharuddin')).toBeInTheDocument()
     })
     const addRecipientBtn = screen.getByRole('button', { name: /tambah penerima/i })
-    expect(addRecipientBtn).toBeDisabled()
-    expect(addRecipientBtn).toHaveAttribute('title', COMING_SOON_TITLE)
-    const importCsvBtn = screen.getByRole('button', { name: /impor csv/i })
-    expect(importCsvBtn).toBeDisabled()
-    expect(importCsvBtn).toHaveAttribute('title', COMING_SOON_TITLE)
+    expect(addRecipientBtn).not.toBeDisabled()
+    // CSV import stays hidden behind NEXT_PUBLIC_ENABLE_CSV_IMPORT (default false)
+    expect(screen.queryByRole('button', { name: /impor csv/i })).not.toBeInTheDocument()
     operatorRecipients.unmount()
 
     const kecamatanRecipients = renderForRole(<Recipients />, 'KECAMATAN')
@@ -192,8 +190,7 @@ describe('Role-based action visibility & Part B read-only screens', () => {
       expect(screen.getByText('Baharuddin')).toBeInTheDocument()
     })
     const createDisbBtn = screen.getByRole('button', { name: /catat penyaluran baru/i })
-    expect(createDisbBtn).toBeDisabled()
-    expect(createDisbBtn).toHaveAttribute('title', COMING_SOON_TITLE)
+    expect(createDisbBtn).not.toBeDisabled()
     operatorDisb.unmount()
 
     const dinsosDisb = renderForRole(<Disbursements />, 'DINAS_SOSIAL')
@@ -408,8 +405,7 @@ describe('Role-based action visibility & Part B read-only screens', () => {
     })
     expect(screen.queryByRole('button', { name: /uji wallet ilegal/i })).not.toBeInTheDocument()
     const bindBtn = screen.getByRole('button', { name: /ikat wallet sesi/i })
-    expect(bindBtn).toBeDisabled()
-    expect(bindBtn).toHaveAttribute('title', COMING_SOON_TITLE)
+    expect(bindBtn).not.toBeDisabled()
     walletView.unmount()
 
     const settingsView = renderForRole(<AccountSettings />, 'OPERATOR_KELURAHAN', true)
@@ -421,8 +417,7 @@ describe('Role-based action visibility & Part B read-only screens', () => {
     expect(screen.queryByRole('button', { name: /uji sesi wallet/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /uji ubah hak akses/i })).not.toBeInTheDocument()
     const pwdBtn = screen.getByRole('button', { name: /ganti kata sandi/i })
-    expect(pwdBtn).toBeDisabled()
-    expect(pwdBtn).toHaveAttribute('title', COMING_SOON_TITLE)
+    expect(pwdBtn).not.toBeDisabled()
     settingsView.unmount()
   })
 })

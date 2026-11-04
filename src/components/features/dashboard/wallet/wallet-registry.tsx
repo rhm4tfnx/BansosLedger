@@ -3,12 +3,17 @@
 import { useState } from 'react'
 import { Copy, LockKeyhole, RotateCw, Wallet } from 'lucide-react'
 import { useRoleAccess } from '@/hooks/use-role-access'
-import { useSession } from '@/lib/api/hooks/auth'
+import { formatApiError } from '@/lib/api/errors'
+import {
+  useSession,
+  useWalletBindMutation,
+  useWalletNonceMutation,
+} from '@/lib/api/hooks/auth'
 import { useWalletStatusQuery } from '@/lib/api/hooks/chain'
+import { getExpectedChainId, toHexChainId, useWallet } from '@/lib/wallet'
 import { WalletPanels } from '@/components/features/dashboard/wallet/wallet-panels'
 import { HashLink } from '@/components/features/dashboard/shared/hash-link'
 import {
-  COMING_SOON_TITLE,
   EmptyState,
   ErrorState,
   TableSkeleton,
@@ -33,7 +38,11 @@ export function WalletRegistry() {
   const { can } = useRoleAccess()
   const sessionQuery = useSession()
   const walletQuery = useWalletStatusQuery()
+  const browserWallet = useWallet()
+  const nonceMutation = useWalletNonceMutation()
+  const bindMutation = useWalletBindMutation()
   const [notice, setNotice] = useState('')
+  const [binding, setBinding] = useState(false)
 
   const wallet = walletQuery.data
   const boundWallet = wallet?.boundWallet ?? sessionQuery.data?.boundWalletAddress ?? null
@@ -41,6 +50,40 @@ export function WalletRegistry() {
   const walletMatchesAuthorized =
     Boolean(boundWallet && wallet?.authorizedWallet) &&
     boundWallet?.toLowerCase() === wallet?.authorizedWallet?.toLowerCase()
+
+  async function handleBindWallet() {
+    if (binding) return
+    setBinding(true)
+    setNotice('')
+    try {
+      const connectedAddress = browserWallet.address ?? (await browserWallet.connect())
+      if (!connectedAddress) {
+        setNotice('Hubungkan wallet MetaMask terlebih dahulu.')
+        return
+      }
+      const numericChainId =
+        browserWallet.chainId ?? wallet?.chainId ?? getExpectedChainId() ?? 1337
+      const chainIdHex = toHexChainId(numericChainId)
+
+      const { message } = await nonceMutation.mutateAsync({
+        address: connectedAddress,
+        chainId: chainIdHex,
+      })
+      const signature = await browserWallet.signMessage(message, connectedAddress)
+      await bindMutation.mutateAsync({
+        address: connectedAddress,
+        chainId: chainIdHex,
+        message,
+        signature,
+      })
+      await Promise.all([sessionQuery.refetch(), walletQuery.refetch()])
+      setNotice('Wallet sesi Kelurahan berhasil diikat dan diverifikasi.')
+    } catch (err) {
+      setNotice(formatApiError(err).message)
+    } finally {
+      setBinding(false)
+    }
+  }
 
   async function copyText(value: string) {
     try {
@@ -74,9 +117,14 @@ export function WalletRegistry() {
               {walletQuery.isFetching ? 'Memuat…' : 'Muat ulang'}
             </button>
             {can('wallet:verify-session') && (
-              <button className={s.primary} disabled title={COMING_SOON_TITLE}>
+              <button
+                type="button"
+                className={s.primary}
+                disabled={binding || nonceMutation.isPending || bindMutation.isPending}
+                onClick={() => void handleBindWallet()}
+              >
                 <Wallet size={15} />
-                Ikat wallet sesi
+                {binding ? 'Mengikat wallet…' : 'Ikat wallet sesi'}
               </button>
             )}
           </div>

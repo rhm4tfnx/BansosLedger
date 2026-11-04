@@ -9,26 +9,42 @@ import {
   Users,
   Layers,
   CheckCircle2,
+  RotateCw,
 } from 'lucide-react'
 import { useRoleAccess } from '@/hooks/use-role-access'
 import { useUrlParams } from '@/hooks/use-url-params'
+import { formatApiError } from '@/lib/api/errors'
 import {
+  useActivateProgramIntentMutation,
+  useCloseProgramIntentMutation,
+  useConfirmProgramChainMutation,
+  useEnrollRecipientsMutation,
   useProgramDetailQuery,
   useProgramEnrollmentsQuery,
   useProgramsQuery,
+  useRegisterRecipientsIntentMutation,
 } from '@/lib/api/hooks/programs'
+import { useRecipientsQuery } from '@/lib/api/hooks/recipients'
+import { shortenHash } from '@/lib/format'
+import { useWallet } from '@/lib/wallet'
 import type { EnrollmentStatus, ProgramStatus } from '@/lib/api-contract'
 import type { ProgramViewModel } from '@/types'
 import { ProgramCharts } from '@/components/features/dashboard/programs/program-charts'
+import { ProgramForm } from '@/components/features/dashboard/programs/program-form'
+import { RecipientDialog } from '@/components/features/dashboard/recipients/recipient-dialog'
 import {
-  COMING_SOON_TITLE,
   EmptyState,
   ErrorState,
   Pager,
   TableSkeleton,
 } from '@/components/features/dashboard/shared/states'
 import { HashLink } from '@/components/features/dashboard/shared/hash-link'
+import { WalletGate } from '@/components/shared/wallet-gate'
 import s from '@/components/features/dashboard/programs/programs.module.css'
+
+const POLL_INTERVAL_MS = 2_000
+const POLL_TIMEOUT_MS = 60_000
+const BATCH_SIZE = 100
 
 type StatusTab = '' | ProgramStatus
 const tabs: { value: StatusTab; label: string }[] = [
@@ -82,6 +98,15 @@ function ProgramsContent() {
 
   const [searchInput, setSearchInput] = useState(q)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [formState, setFormState] = useState<
+    { mode: 'create' } | { mode: 'edit'; program: ProgramViewModel } | null
+  >(null)
+  const [enrollDialogProgram, setEnrollDialogProgram] = useState<ProgramViewModel | null>(null)
+  const [chainAction, setChainAction] = useState<{
+    kind: 'create' | 'register' | 'close'
+    program: ProgramViewModel
+  } | null>(null)
+
   const setParamsRef = useRef(params.set)
   useEffect(() => {
     setParamsRef.current = params.set
@@ -116,10 +141,6 @@ function ProgramsContent() {
   const onChain = overviewItems.filter((p) => p.programId).length
   const tabCount = (value: StatusTab) =>
     overview.isSuccess ? String(value ? count(value) : overviewItems.length) : '…'
-  const writeAction = (permission: Parameters<typeof can>[0]) => ({
-    disabled: true,
-    title: can(permission) ? COMING_SOON_TITLE : undefined,
-  })
 
   function selectProgram(id: string) {
     setSelectedId(id)
@@ -190,7 +211,11 @@ function ProgramsContent() {
             Ekspor Rekap (CSV)
           </button>
           {operator && (
-            <button type="button" className={s.primary} disabled title={COMING_SOON_TITLE}>
+            <button
+              type="button"
+              className={s.primary}
+              onClick={() => setFormState({ mode: 'create' })}
+            >
               <Plus size={16} />
               Tambah Program Bantuan
             </button>
@@ -242,7 +267,7 @@ function ProgramsContent() {
         <section className={s.card}>
           <header>
             <div>
-              <h2>Siklus Status Program & Proteksi Data Final</h2>
+              <h2>Siklus Status Program &amp; Proteksi Data Final</h2>
               <p>Hak kelola DRAFT dan penguncian parameter final</p>
             </div>
             <span className={s.badge}>No Hard Delete</span>
@@ -260,7 +285,7 @@ function ProgramsContent() {
               {
                 label: 'Program DRAFT (Editable)',
                 value: count('DRAFT'),
-                note: 'Edit dan soft delete khusus Operator',
+                note: 'Edit parameter khusus Operator',
               },
               {
                 label: 'Program SELESAI (Final)',
@@ -284,7 +309,7 @@ function ProgramsContent() {
         <section className={s.card}>
           <header>
             <div>
-              <h2>Acuan Validasi & Sisa Anggaran</h2>
+              <h2>Acuan Validasi &amp; Sisa Anggaran</h2>
               <p>Aturan penyaluran diverifikasi server dan smart contract</p>
             </div>
             <span className={s.badge}>On-chain</span>
@@ -329,7 +354,9 @@ function ProgramsContent() {
           </div>
         </section>
       </div>
-      <ProgramCharts programs={overviewItems.filter((p) => p.status !== 'DRAFT' || p.enrolledCount > 0)} />
+      <ProgramCharts
+        programs={overviewItems.filter((p) => p.status !== 'DRAFT' || p.enrolledCount > 0)}
+      />
       <div className={s.lower}>
         <section className={`${s.card} ${s.list}`}>
           <header>
@@ -462,39 +489,54 @@ function ProgramsContent() {
                           </button>
                           {can('program:update') && p.status === 'DRAFT' && (
                             <>
-                              <button type="button" {...writeAction('program:update')}>
+                              <button
+                                type="button"
+                                onClick={() => setChainAction({ kind: 'create', program: p })}
+                              >
                                 Aktivasi (createProgram)
                               </button>
-                              <button type="button" {...writeAction('program:update')}>
+                              <button
+                                type="button"
+                                onClick={() => setFormState({ mode: 'edit', program: p })}
+                              >
                                 Edit
                               </button>
-                              {can('program:soft-delete') && (
-                                <button
-                                  type="button"
-                                  className={s.danger}
-                                  {...writeAction('program:soft-delete')}
-                                >
-                                  Hapus
-                                </button>
-                              )}
                             </>
                           )}
                           {can('program:update') && p.status === 'ACTIVE' && (
                             <>
-                              <button type="button" {...writeAction('program:update')}>
+                              <button
+                                type="button"
+                                onClick={() => setFormState({ mode: 'edit', program: p })}
+                              >
                                 Edit
                               </button>
-                              <button type="button" {...writeAction('program:update')}>
+                              <button
+                                type="button"
+                                onClick={() => setChainAction({ kind: 'close', program: p })}
+                              >
                                 Tutup program
                               </button>
                             </>
                           )}
                           {can('program:update') && p.status !== 'CLOSED' && (
                             <>
-                              <button type="button" {...writeAction('program:update')}>
+                              <button
+                                type="button"
+                                onClick={() => setEnrollDialogProgram(p)}
+                              >
                                 Daftarkan penerima
                               </button>
-                              <button type="button" {...writeAction('program:update')}>
+                              <button
+                                type="button"
+                                disabled={p.status !== 'ACTIVE'}
+                                title={
+                                  p.status !== 'ACTIVE'
+                                    ? 'Aktifkan program terlebih dahulu untuk registrasi on-chain'
+                                    : undefined
+                                }
+                                onClick={() => setChainAction({ kind: 'register', program: p })}
+                              >
                                 Registrasi on-chain
                               </button>
                             </>
@@ -635,7 +677,530 @@ function ProgramsContent() {
           ) : null}
         </aside>
       </div>
+      {formState && (
+        <ProgramForm
+          initial={formState.mode === 'edit' ? formState.program : undefined}
+          onClose={() => setFormState(null)}
+        />
+      )}
+      {enrollDialogProgram && (
+        <EnrollRecipientsDialog
+          program={enrollDialogProgram}
+          onClose={() => setEnrollDialogProgram(null)}
+        />
+      )}
+      {chainAction && (
+        <ProgramChainActionDialog
+          kind={chainAction.kind}
+          program={chainAction.program}
+          onClose={() => setChainAction(null)}
+        />
+      )}
     </div>
+  )
+}
+
+function EnrollRecipientsDialog({
+  program,
+  onClose,
+}: {
+  program: ProgramViewModel
+  onClose: () => void
+}) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const candidatesQuery = useRecipientsQuery({
+    page: 1,
+    limit: 100,
+    status: 'FINAL',
+    notEnrolledIn: program.id,
+    q: search.trim() || undefined,
+  })
+  const enrollMutation = useEnrollRecipientsMutation()
+
+  const candidates = candidatesQuery.data?.items ?? []
+
+  function toggleRecipient(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : prev.length < 100
+          ? [...prev, id]
+          : prev,
+    )
+  }
+
+  function toggleAll() {
+    if (selectedIds.length === candidates.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(candidates.slice(0, 100).map((c) => c.id))
+    }
+  }
+
+  async function handleEnroll() {
+    if (!selectedIds.length || enrollMutation.isPending) return
+    await enrollMutation.mutateAsync({
+      programId: program.id,
+      recipientIds: selectedIds,
+    })
+    onClose()
+  }
+
+  const formattedError = enrollMutation.error ? formatApiError(enrollMutation.error) : null
+
+  return (
+    <RecipientDialog
+      title={`Daftarkan Penerima · ${program.code}`}
+      subtitle="Menampilkan penerima berstatus FINAL yang belum terdaftar pada program ini (maksimal 100 per pendaftaran)."
+      onClose={() => {
+        if (!enrollMutation.isPending) onClose()
+      }}
+    >
+      <div className={s.form}>
+        <label className={s.full}>
+          Cari penerima FINAL
+          <input
+            aria-label="Cari kandidat penerima"
+            placeholder="Cari nama atau hash komitmen…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </label>
+        <div className={s.full}>
+          {candidatesQuery.isPending ? (
+            <TableSkeleton rows={5} label="Memuat penerima FINAL" />
+          ) : candidatesQuery.isError ? (
+            <ErrorState
+              error={candidatesQuery.error}
+              onRetry={() => void candidatesQuery.refetch()}
+            />
+          ) : !candidates.length ? (
+            <EmptyState>
+              Tidak ada penerima berstatus FINAL yang belum terdaftar pada program ini.
+            </EmptyState>
+          ) : (
+            <>
+              <div className={s.rowActions}>
+                <button type="button" onClick={toggleAll}>
+                  {selectedIds.length === candidates.length
+                    ? 'Batalkan Semua Pilihan'
+                    : 'Pilih Semua di Halaman Ini'}
+                </button>
+                <small>{selectedIds.length} dipilih (maks. 100)</small>
+              </div>
+              <div className={s.tableWrap}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Pilih</th>
+                      <th>Nama Penerima</th>
+                      <th>NIK (Tersamar)</th>
+                      <th>Domisili</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {candidates.map((c) => (
+                      <tr key={c.id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            aria-label={`Pilih ${c.name}`}
+                            checked={selectedIds.includes(c.id)}
+                            onChange={() => toggleRecipient(c.id)}
+                          />
+                        </td>
+                        <td>{c.name}</td>
+                        <td>
+                          <code>{c.nikMasked}</code>
+                        </td>
+                        <td>{c.addressLabel}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+        {formattedError && (
+          <div role="alert" className={s.full}>
+            <p>{formattedError.message}</p>
+            {formattedError.requestId && <small>ID Permintaan: {formattedError.requestId}</small>}
+          </div>
+        )}
+        <footer className={s.full}>
+          <button type="button" disabled={enrollMutation.isPending} onClick={onClose}>
+            Batal
+          </button>
+          <button
+            type="button"
+            className={s.primary}
+            disabled={!selectedIds.length || enrollMutation.isPending}
+            onClick={() => void handleEnroll()}
+          >
+            {enrollMutation.isPending
+              ? 'Mendaftarkan…'
+              : `Daftarkan ${selectedIds.length} Penerima`}
+          </button>
+        </footer>
+      </div>
+    </RecipientDialog>
+  )
+}
+
+function ProgramChainActionDialog({
+  kind,
+  program,
+  onClose,
+}: {
+  kind: 'create' | 'register' | 'close'
+  program: ProgramViewModel
+  onClose: () => void
+}) {
+  const wallet = useWallet()
+  const activateIntent = useActivateProgramIntentMutation()
+  const registerIntent = useRegisterRecipientsIntentMutation()
+  const closeIntent = useCloseProgramIntentMutation()
+  const confirmMutation = useConfirmProgramChainMutation()
+
+  const enrolledQuery = useProgramEnrollmentsQuery(program.id, {
+    page: 1,
+    limit: 100,
+    status: 'ENROLLED',
+    enabled: kind === 'register',
+  })
+
+  const [closeConfirmed, setCloseConfirmed] = useState(false)
+  const [phase, setPhase] = useState<'summary' | 'waiting-block' | 'timeout' | 'confirmed'>(
+    'summary',
+  )
+  const [txHash, setTxHash] = useState<string | null>(null)
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  )
+  const [errorMsg, setErrorMsg] = useState<{ message: string; requestId?: string | null } | null>(
+    null,
+  )
+
+  const programPollQuery = useProgramDetailQuery(program.id, {
+    enabled: phase === 'waiting-block',
+    refetchInterval: phase === 'waiting-block' ? POLL_INTERVAL_MS : false,
+  })
+
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      wallet.clearPendingTx()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (phase !== 'waiting-block' || !programPollQuery.data) return
+    if (kind === 'create' && programPollQuery.data.status === 'ACTIVE') {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      setPhase('confirmed')
+    } else if (kind === 'close' && programPollQuery.data.status === 'CLOSED') {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      setPhase('confirmed')
+    }
+  }, [kind, phase, programPollQuery.data])
+
+  async function pollConfirmOnce(hash: string): Promise<boolean> {
+    const res = await confirmMutation.mutateAsync({
+      programId: program.id,
+      kind,
+      txHash: hash,
+    })
+    if (res.status === 'CONFIRMED') {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      wallet.clearPendingTx()
+      setPhase('confirmed')
+      return true
+    }
+    return false
+  }
+
+  function startConfirmationPolling(hash: string) {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+
+    pollTimerRef.current = setInterval(() => {
+      void pollConfirmOnce(hash).catch((err) => {
+        if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+        if (timeoutRef.current) clearTimeout(timeoutRef.current)
+        const formatted = formatApiError(err)
+        setErrorMsg({ message: formatted.message, requestId: formatted.requestId })
+        setPhase('summary')
+      })
+    }, POLL_INTERVAL_MS)
+
+    timeoutRef.current = setTimeout(() => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+      setPhase('timeout')
+    }, POLL_TIMEOUT_MS)
+  }
+
+  async function handleExecute() {
+    setErrorMsg(null)
+    try {
+      if (kind === 'create') {
+        const intent = await activateIntent.mutateAsync(program.id)
+        const hash = await wallet.sendIntent({
+          to: intent.to,
+          data: intent.data,
+          label: `Aktivasi program ${program.code}`,
+        })
+        setTxHash(hash)
+        setPhase('waiting-block')
+        const confirmedImmediately = await pollConfirmOnce(hash)
+        if (!confirmedImmediately) {
+          startConfirmationPolling(hash)
+        }
+        return
+      }
+
+      if (kind === 'close') {
+        if (!closeConfirmed) return
+        const intent = await closeIntent.mutateAsync(program.id)
+        const hash = await wallet.sendIntent({
+          to: intent.to,
+          data: intent.data,
+          label: `Tutup program ${program.code}`,
+        })
+        setTxHash(hash)
+        setPhase('waiting-block')
+        const confirmedImmediately = await pollConfirmOnce(hash)
+        if (!confirmedImmediately) {
+          startConfirmationPolling(hash)
+        }
+        return
+      }
+
+      // kind === 'register': execute in batches of at most 100
+      const enrolledItems = enrolledQuery.data?.items ?? []
+      const allIds = enrolledItems.map((item) => item.recipientId)
+      if (!allIds.length) {
+        setErrorMsg({ message: 'Tidak ada penerima ENROLLED yang perlu diregistrasikan on-chain.' })
+        return
+      }
+
+      const batches: string[][] = []
+      for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
+        batches.push(allIds.slice(i, i + BATCH_SIZE))
+      }
+
+      for (let b = 0; b < batches.length; b++) {
+        setBatchProgress({ current: b + 1, total: batches.length })
+        const intent = await registerIntent.mutateAsync({
+          programId: program.id,
+          recipientIds: batches[b],
+        })
+        const hash = await wallet.sendIntent({
+          to: intent.to,
+          data: intent.data,
+          label: `Registrasi on-chain ${program.code} (Batch ${b + 1}/${batches.length})`,
+        })
+        setTxHash(hash)
+        setPhase('waiting-block')
+        const confirmedImmediately = await pollConfirmOnce(hash)
+        if (!confirmedImmediately && b === batches.length - 1) {
+          startConfirmationPolling(hash)
+          return
+        }
+      }
+    } catch (err) {
+      const formatted = formatApiError(err)
+      setErrorMsg({ message: formatted.message, requestId: formatted.requestId })
+    }
+  }
+
+  async function handleManualRecheck() {
+    if (!txHash) return
+    setErrorMsg(null)
+    setPhase('waiting-block')
+    try {
+      const done = await pollConfirmOnce(txHash)
+      if (!done) {
+        startConfirmationPolling(txHash)
+      }
+    } catch (err) {
+      const formatted = formatApiError(err)
+      setErrorMsg({ message: formatted.message, requestId: formatted.requestId })
+    }
+  }
+
+  const titleMap = {
+    create: `Aktivasi Program On-Chain (createProgram) · ${program.code}`,
+    register: `Registrasi Penerima On-Chain · ${program.code}`,
+    close: `Tutup Program On-Chain (closeProgram) · ${program.code}`,
+  }
+
+  const isBusy =
+    activateIntent.isPending ||
+    registerIntent.isPending ||
+    closeIntent.isPending ||
+    confirmMutation.isPending ||
+    phase === 'waiting-block'
+
+  const enrolledCountToRegister = enrolledQuery.data?.items.length ?? 0
+
+  return (
+    <RecipientDialog
+      title={titleMap[kind]}
+      subtitle="Transaksi ditandatangani oleh wallet Kelurahan dan diverifikasi oleh server dari receipt blok Hyperledger Besu."
+      onClose={() => {
+        if (!isBusy) onClose()
+      }}
+    >
+      <div className={s.form}>
+        <div className={`${s.inset} ${s.full}`}>
+          <h3>Ringkasan Konfirmasi On-Chain</h3>
+          <dl>
+            <div>
+              <dt>Program</dt>
+              <dd>
+                {program.name} ({program.code})
+              </dd>
+            </div>
+            <div>
+              <dt>Nominal / KPM</dt>
+              <dd>{program.amountPerRecipientFormatted}</dd>
+            </div>
+            <div>
+              <dt>Periode</dt>
+              <dd>{program.periodRangeLabel}</dd>
+            </div>
+            {kind === 'register' && (
+              <div>
+                <dt>Kandidat ENROLLED siap registrasi</dt>
+                <dd>{enrolledQuery.isPending ? 'Memuat…' : `${enrolledCountToRegister} KPM`}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+
+        {kind === 'close' && phase === 'summary' && (
+          <div className={`${s.inset} ${s.full}`}>
+            <strong>Konfirmasi Ganda Penutupan Program</strong>
+            <p>
+              Penutupan program bersifat permanen di smart contract. Setelah ditutup, program tidak
+              dapat diaktifkan kembali dan tidak dapat menerima penyaluran baru.
+            </p>
+            <label>
+              <input
+                type="checkbox"
+                checked={closeConfirmed}
+                onChange={(e) => setCloseConfirmed(e.target.checked)}
+              />{' '}
+              Saya memahami bahwa penutupan program tidak dapat diubah lagi.
+            </label>
+          </div>
+        )}
+
+        {batchProgress && (
+          <div className={s.full} aria-live="polite">
+            <small>
+              Progres batch registrasi: {batchProgress.current} dari {batchProgress.total} (maks.{' '}
+              {BATCH_SIZE} penerima per transaksi)
+            </small>
+          </div>
+        )}
+
+        {phase === 'waiting-block' && (
+          <div role="status" aria-live="polite" className={`${s.inset} ${s.full}`}>
+            <strong>Menunggu blok…</strong>
+            <p>
+              Transaksi telah dikirim ke jaringan Hyperledger Besu. Menunggu konfirmasi receipt
+              blok oleh server.
+            </p>
+            {txHash && <HashLink hash={txHash} short={shortenHash(txHash)} />}
+            <div>
+              <button
+                type="button"
+                disabled={confirmMutation.isPending}
+                onClick={() => void handleManualRecheck()}
+              >
+                <RotateCw size={14} /> Periksa ulang
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'timeout' && (
+          <div role="alert" aria-live="polite" className={`${s.inset} ${s.full}`}>
+            <strong>Waktu tunggu konfirmasi blok habis</strong>
+            <p>
+              Receipt blok belum terkonfirmasi dalam batas waktu pantau otomatis. Anda dapat
+              memeriksa ulang secara manual.
+            </p>
+            {txHash && <HashLink hash={txHash} short={shortenHash(txHash)} />}
+            <div>
+              <button
+                type="button"
+                className={s.primary}
+                disabled={confirmMutation.isPending}
+                onClick={() => void handleManualRecheck()}
+              >
+                <RotateCw size={14} /> Periksa ulang
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'confirmed' && (
+          <div role="status" aria-live="polite" className={`${s.inset} ${s.full}`}>
+            <strong>✓ Transaksi On-Chain Terkonfirmasi</strong>
+            <p>Status program dan data on-chain telah berhasil diperbarui oleh server.</p>
+            {txHash && <HashLink hash={txHash} short={shortenHash(txHash)} />}
+          </div>
+        )}
+
+        {errorMsg && (
+          <div role="alert" className={s.full}>
+            <p>{errorMsg.message}</p>
+            {errorMsg.requestId && <small>ID Permintaan: {errorMsg.requestId}</small>}
+          </div>
+        )}
+
+        {phase === 'summary' && (
+          <div className={s.full}>
+            <WalletGate>
+              <button
+                type="button"
+                className={s.primary}
+                disabled={
+                  isBusy ||
+                  (kind === 'close' && !closeConfirmed) ||
+                  (kind === 'register' && (enrolledQuery.isPending || enrolledCountToRegister === 0))
+                }
+                onClick={() => void handleExecute()}
+              >
+                {kind === 'create'
+                  ? 'Tanda Tangani & Aktivasi Program'
+                  : kind === 'register'
+                    ? `Tanda Tangani Registrasi (${enrolledCountToRegister} KPM)`
+                    : 'Tanda Tangani & Tutup Program'}
+              </button>
+            </WalletGate>
+          </div>
+        )}
+
+        <footer className={s.full}>
+          <button type="button" disabled={isBusy} onClick={onClose}>
+            {phase === 'confirmed' ? 'Selesai & Tutup' : 'Tutup'}
+          </button>
+        </footer>
+      </div>
+    </RecipientDialog>
   )
 }
 

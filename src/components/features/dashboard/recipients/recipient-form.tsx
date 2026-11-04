@@ -1,209 +1,242 @@
 'use client'
-import { useState } from 'react'
+
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { RecipientDialog } from '@/components/features/dashboard/recipients/recipient-dialog'
+import { formatApiError } from '@/lib/api/errors'
 import {
-  type Recipient,
-  regions,
-  jobs,
-  programs,
-  demoHash,
-  validateRecipient,
-} from '@/mocks/recipient-data'
+  useCreateRecipientMutation,
+  useUpdateRecipientMutation,
+} from '@/lib/api/hooks/recipients'
+import type { RecipientViewModel } from '@/types'
 import s from '@/components/features/dashboard/recipients/recipients.module.css'
-export function RecipientForm({
-  existing,
-  editing,
-  onSave,
-  onClose,
-}: {
-  existing: Recipient[]
-  editing?: Recipient
-  onSave: (r: Recipient) => void
-  onClose: () => void
-}) {
-  const [data, setData] = useState<Recipient>(
-    editing || {
-      id: crypto.randomUUID(),
-      nik: '',
-      name: '',
-      kk: '',
-      region: '',
-      address: '',
-      job: '',
-      income: 0,
-      program: '',
-      dependents: 0,
-      status: 'DRAFT',
-      deleted: false,
-      received: 0,
-    },
+
+export function isValidNikFormat(nik: string): boolean {
+  if (!/^\d{16}$/.test(nik)) return false
+  const province = Number(nik.slice(0, 2))
+  const day = Number(nik.slice(6, 8))
+  const month = Number(nik.slice(8, 10))
+  return (
+    province >= 11 &&
+    province <= 99 &&
+    month >= 1 &&
+    month <= 12 &&
+    ((day >= 1 && day <= 31) || (day >= 41 && day <= 71))
   )
-  const [error, setError] = useState('')
-  const update = (key: keyof Recipient, value: string | number) =>
-    setData((d) => ({ ...d, [key]: value }))
-  function sample() {
-    const suffix = String(Date.now()).slice(-12)
-    setData((d) => ({
-      ...d,
-      nik: '0000' + suffix,
-      kk: '0001' + suffix,
-      name: 'Penerima Contoh Baru',
-      region: regions[0],
-      address: 'Jl. Contoh No. 18',
-      job: jobs[0],
-      income: 650000,
-      program: programs[0],
-      dependents: 4,
-    }))
-  }
+}
+
+function createRecipientFormSchema(isEdit: boolean) {
+  return z.object({
+    nik: isEdit
+      ? z
+          .string()
+          .trim()
+          .refine((val) => val === '' || isValidNikFormat(val), {
+            message:
+              'NIK harus 16 digit angka dengan kode provinsi, tanggal, dan bulan lahir yang valid.',
+          })
+      : z
+          .string()
+          .trim()
+          .refine((val) => isValidNikFormat(val), {
+            message:
+              'NIK wajib 16 digit angka dengan kode provinsi, tanggal, dan bulan lahir yang valid.',
+          }),
+    name: z
+      .string()
+      .trim()
+      .min(2, 'Nama lengkap minimal 2 karakter.')
+      .max(160, 'Nama lengkap maksimal 160 karakter.'),
+    dusun: z
+      .string()
+      .trim()
+      .min(1, 'Dusun / Lingkungan wajib diisi.')
+      .max(100, 'Dusun maksimal 100 karakter.'),
+    rt: z
+      .string()
+      .trim()
+      .regex(/^\d{1,3}$/, 'RT harus 1–3 digit angka.'),
+    rw: z
+      .string()
+      .trim()
+      .regex(/^\d{1,3}$/, 'RW harus 1–3 digit angka.'),
+    phone: z
+      .string()
+      .trim()
+      .refine((val) => val === '' || /^\+?[0-9 -]{7,20}$/.test(val), {
+        message: 'Nomor telepon harus 7–20 karakter angka.',
+      }),
+  })
+}
+
+type RecipientFormValues = z.infer<ReturnType<typeof createRecipientFormSchema>>
+
+export interface RecipientFormProps {
+  initial?: RecipientViewModel
+  onClose: () => void
+  onSaved?: (recipient: RecipientViewModel) => void
+}
+
+export function RecipientForm({ initial, onClose, onSaved }: RecipientFormProps) {
+  const isEdit = Boolean(initial)
+  const createMutation = useCreateRecipientMutation()
+  const updateMutation = useUpdateRecipientMutation()
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RecipientFormValues>({
+    resolver: zodResolver(createRecipientFormSchema(isEdit)),
+    defaultValues: {
+      nik: '',
+      name: initial?.name ?? '',
+      dusun: initial?.dusun ?? 'Kampung Baru',
+      rt: initial?.rt ?? '001',
+      rw: initial?.rw ?? '001',
+      phone: initial?.phone ?? '',
+    },
+  })
+
+  const activeError = createMutation.error ?? updateMutation.error
+  const formattedError = activeError ? formatApiError(activeError) : null
+  const isPending = isSubmitting || createMutation.isPending || updateMutation.isPending
+
+  const onSubmit = handleSubmit(async (values) => {
+    const address = {
+      dusun: values.dusun.trim(),
+      rt: values.rt.trim(),
+      rw: values.rw.trim(),
+    }
+    const phone = values.phone.trim() ? values.phone.trim() : undefined
+
+    if (initial) {
+      const updated = await updateMutation.mutateAsync({
+        id: initial.id,
+        patch: {
+          ...(values.nik.trim() ? { nik: values.nik.trim() } : {}),
+          name: values.name.trim(),
+          address,
+          ...(phone !== undefined ? { phone } : {}),
+        },
+      })
+      onSaved?.(updated)
+      onClose()
+      return
+    }
+
+    const created = await createMutation.mutateAsync({
+      nik: values.nik.trim(),
+      name: values.name.trim(),
+      address,
+      ...(phone !== undefined ? { phone } : {}),
+    })
+    onSaved?.(created)
+    onClose()
+  })
+
   return (
     <RecipientDialog
-      title={editing ? 'Edit Data Penerima' : 'Tambah Data Penerima Baru (Status Awal: DRAFT)'}
-      subtitle="Validasi NIK 16 digit, duplikasi data simulasi, dan kelengkapan data demografi."
-      onClose={onClose}
+      title={initial ? 'Edit Penerima (DRAFT)' : 'Tambah Penerima Bantuan Baru'}
+      subtitle="Data baru disimpan sebagai DRAFT dan dapat diedit hingga dikunci menjadi FINAL."
+      onClose={() => {
+        if (!isPending) onClose()
+      }}
     >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          const err = validateRecipient(data, existing)
-          setError(err)
-          if (!err) onSave(data)
-        }}
-      >
-        <div className={s.formBody}>
-          <div className={s.testTools}>
-            <strong>Alat Bantu Uji Validasi Form</strong>
-            <button type="button" onClick={sample}>
-              Isi Contoh Valid
-            </button>
-            <button
-              type="button"
-              onClick={() => update('nik', existing.find((r) => r.id !== data.id)?.nik || '')}
-            >
-              Uji NIK Duplikat
-            </button>
-          </div>
-          <label>
-            NIK <span className={s.required}>*</span>
-            <small>{data.nik.length} / 16 digit</small>
-            <input
-              required
-              inputMode="numeric"
-              maxLength={16}
-              pattern="[0-9]{16}"
-              value={data.nik}
-              onChange={(e) => update('nik', e.target.value.replace(/\D/g, ''))}
-              placeholder="Masukkan 16 digit NIK"
-            />
-          </label>
-          <p className={s.helper}>
-            Wajib 16 digit angka dan belum terdaftar. Gunakan identitas dummy saja.
-          </p>
-          <div className={s.formGrid}>
-            <label>
-              Nama Lengkap Sesuai KTP *
-              <input
-                required
-                maxLength={100}
-                value={data.name}
-                onChange={(e) => update('name', e.target.value)}
-              />
-            </label>
-            <label>
-              Nomor Kartu Keluarga (16 Digit) *
-              <input
-                required
-                inputMode="numeric"
-                pattern="[0-9]{16}"
-                maxLength={16}
-                value={data.kk}
-                onChange={(e) => update('kk', e.target.value.replace(/\D/g, ''))}
-              />
-            </label>
-            <label>
-              Wilayah RT / RW (Kel. Takkalasi) *
-              <select
-                required
-                value={data.region}
-                onChange={(e) => update('region', e.target.value)}
-              >
-                <option value="">Pilih RT / RW</option>
-                {regions.map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Detail Alamat Domisili *
-              <input
-                required
-                maxLength={200}
-                value={data.address}
-                onChange={(e) => update('address', e.target.value)}
-              />
-            </label>
-            <label>
-              Pekerjaan Utama *
-              <select required value={data.job} onChange={(e) => update('job', e.target.value)}>
-                <option value="">Pilih Pekerjaan</option>
-                {jobs.map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Estimasi Penghasilan (Rp/Bulan) *
-              <input
-                type="number"
-                required
-                min={0}
-                value={data.income}
-                onChange={(e) => update('income', e.target.valueAsNumber)}
-              />
-            </label>
-            <label>
-              Program Bantuan Sasaran *
-              <select
-                required
-                value={data.program}
-                onChange={(e) => update('program', e.target.value)}
-              >
-                <option value="">Pilih Program</option>
-                {programs.map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Jumlah Tanggungan Keluarga *
-              <input
-                type="number"
-                required
-                min={0}
-                step={1}
-                value={data.dependents}
-                onChange={(e) => update('dependents', e.target.valueAsNumber)}
-              />
-            </label>
-          </div>
-          <div className={s.hashPreview}>
-            <strong>Pratinjau hash identitas (keccak256) · Simulasi off-chain</strong>
-            <code>
-              {/^\d{16}$/.test(data.nik) ? demoHash(data.id) : 'Menunggu input NIK 16 digit...'}
-            </code>
-          </div>
-          {error && (
-            <p role="alert" className={s.error}>
-              {error}
+      <form className={s.form} onSubmit={(e) => void onSubmit(e)} noValidate>
+        <label>
+          Nama Lengkap Sesuai KTP *
+          <input
+            aria-label="Nama Lengkap Sesuai KTP"
+            placeholder="Contoh: Siti Rahmawati"
+            disabled={isPending}
+            {...register('name')}
+          />
+          {errors.name && <small role="alert">{errors.name.message}</small>}
+        </label>
+        <label>
+          Nomor Induk Kependudukan (NIK 16 Digit) {isEdit ? '(Opsional jika tidak diubah)' : '*'}
+          <input
+            aria-label="Nomor Induk Kependudukan (NIK)"
+            inputMode="numeric"
+            maxLength={16}
+            placeholder={initial ? `Tersimpan: ${initial.nikMasked}` : '731104xxxxxxxxxx'}
+            disabled={isPending}
+            {...register('nik')}
+          />
+          <small>
+            NIK dienkripsi AES-256-GCM di server dan tidak pernah ditempatkan pada URL.
+          </small>
+          {errors.nik && <small role="alert">{errors.nik.message}</small>}
+        </label>
+        <label>
+          Dusun / Lingkungan *
+          <input
+            aria-label="Dusun / Lingkungan"
+            placeholder="Contoh: Kampung Baru"
+            disabled={isPending}
+            {...register('dusun')}
+          />
+          {errors.dusun && <small role="alert">{errors.dusun.message}</small>}
+        </label>
+        <label>
+          RT *
+          <input
+            aria-label="RT"
+            inputMode="numeric"
+            maxLength={3}
+            placeholder="001"
+            disabled={isPending}
+            {...register('rt')}
+          />
+          {errors.rt && <small role="alert">{errors.rt.message}</small>}
+        </label>
+        <label>
+          RW *
+          <input
+            aria-label="RW"
+            inputMode="numeric"
+            maxLength={3}
+            placeholder="001"
+            disabled={isPending}
+            {...register('rw')}
+          />
+          {errors.rw && <small role="alert">{errors.rw.message}</small>}
+        </label>
+        <label>
+          Nomor Telepon (Opsional)
+          <input
+            aria-label="Nomor Telepon"
+            inputMode="tel"
+            maxLength={20}
+            placeholder="08xxxxxxxxxx"
+            disabled={isPending}
+            {...register('phone')}
+          />
+          {errors.phone && <small role="alert">{errors.phone.message}</small>}
+        </label>
+        <div className={`${s.hashPreview} ${s.full}`}>
+          <div>
+            <strong>Perlindungan Privasi (UU PDP)</strong>
+            <p>
+              Komitmen identitas <code>keccak256(NIK ‖ PEPPER)</code> akan dibentuk oleh server
+              ketika status penerima dikunci menjadi FINAL.
             </p>
-          )}
+          </div>
         </div>
-        <footer>
-          <button type="button" onClick={onClose}>
+        {formattedError && (
+          <div role="alert" className={s.full}>
+            <p>{formattedError.message}</p>
+            {formattedError.requestId && <small>ID Permintaan: {formattedError.requestId}</small>}
+          </div>
+        )}
+        <footer className={s.full}>
+          <button type="button" disabled={isPending} onClick={onClose}>
             Batal
           </button>
-          <button className={s.primary} type="submit">
-            Simpan Data Penerima (DRAFT)
+          <button type="submit" disabled={isPending} className={s.primary}>
+            {isPending ? 'Menyimpan…' : 'Simpan sebagai DRAFT'}
           </button>
         </footer>
       </form>
