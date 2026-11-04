@@ -3,19 +3,20 @@ import { NetworkWidget } from '@/components/features/dashboard/monitoring/networ
 import networkStyles from '@/components/features/dashboard/monitoring/monitoring.module.css'
 import { ScrollReveal } from '@/components/ui/scroll-reveal'
 import { SiteFooter } from '@/components/features/navigation/site-footer'
-import { publicLedger } from '@/components/features/public/public-ledger'
 import { BlockExplorer } from '@/components/features/explorer/block-explorer'
 
-export const metadata: Metadata = {
-  title: 'Block Explorer — BansosLedger',
-  description:
-    'Jelajahi blok, transaksi, dan validator jaringan BansosLedger QBFT. Pratinjau teknis dengan data ilustrasi.',
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Block Explorer — BansosLedger',
+    description:
+      'Jelajahi blok, transaksi, alamat, kontrak, dan validator jaringan konsorsium QBFT BansosLedger.',
+  }
 }
 
 export default function ExplorerPage() {
   return (
     <ScrollReveal>
-      <BlockExplorer ledger={publicLedger} />
+      <BlockExplorer />
       <div className={networkStyles.publicWidget}>
         <NetworkWidget />
       </div>

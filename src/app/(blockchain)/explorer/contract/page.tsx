@@ -1,3 +1,13 @@
+import type { Metadata } from 'next'
 import { ContractDetails } from '@/components/features/explorer/contract-details'
-export const metadata = { title: 'Kontrak | BansosLedger', description: 'Kontrak, wallet berwenang, dan ABI ilustrasi BansosLedger.' }
-export default function Page() { return <ContractDetails /> }
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Kontrak | BansosLedger',
+    description: 'Alamat kontrak, wallet berwenang, status jeda, dan ABI BansosLedger.',
+  }
+}
+
+export default function Page() {
+  return <ContractDetails />
+}

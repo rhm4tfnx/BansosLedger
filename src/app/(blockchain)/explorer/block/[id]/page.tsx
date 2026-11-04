@@ -1,12 +1,18 @@
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { blocks } from '@/mocks/explorer-data'
 import { BlockDetails } from '@/components/features/explorer/block-details'
 import { ScrollReveal } from '@/components/ui/scroll-reveal'
 
-export const metadata = {
-  title: 'Detail Blok | BansosLedger',
-  description:
-    'Informasi blok, konsensus QBFT, transaksi dan validator BansosLedger. Data ilustrasi.',
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  return {
+    title: `Detail Blok #${id} | BansosLedger`,
+    description: `Informasi blok #${id}, konsensus QBFT, proposer, dan jumlah transaksi BansosLedger.`,
+  }
 }
 
 export default async function Page({
@@ -18,13 +24,14 @@ export default async function Page({
 }) {
   const { id } = await params
   const { tab } = await searchParams
-  const block = blocks.find((item) => String(item.id) === id)
-  if (!block) notFound()
+  if (!/^\d+$/.test(id)) {
+    notFound()
+  }
   return (
     <ScrollReveal>
       <BlockDetails
-        key={`${id}-${tab}`}
-        block={block}
+        key={`${id}-${tab ?? 'overview'}`}
+        blockNumber={id}
         initialTab={tab === 'transactions' ? 'transactions' : 'overview'}
       />
     </ScrollReveal>

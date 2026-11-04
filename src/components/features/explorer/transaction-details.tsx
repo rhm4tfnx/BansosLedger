@@ -2,10 +2,9 @@
 
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, CheckCircle2, Copy } from 'lucide-react'
-import { transactions, blocks } from '@/mocks/explorer-data'
-import { addresses } from '@/constants/explorer-addresses'
-import { formatPeriod } from '@/lib/utils'
+import { AlertTriangle, ArrowLeft, CheckCircle2, Copy, XCircle } from 'lucide-react'
+import { formatApiError } from '@/lib/api/errors'
+import { useExplorerTxQuery } from '@/lib/api/hooks/explorer'
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -15,43 +14,28 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
     </div>
   )
 }
-const tabs = ['Overview', 'Logs', 'State Changes'] as const
+
 const panel = 'rounded-control border bg-white p-5 sm:p-7'
 
-export function TransactionDetails({
-  transaction: t,
-}: {
-  transaction: (typeof transactions)[number]
-}) {
-  const [tab, setTab] = useState<(typeof tabs)[number]>('Overview')
+export interface TransactionDetailsProps {
+  txHash: string
+}
+
+export function TransactionDetails({ txHash }: TransactionDetailsProps) {
   const [copyStatus, setCopyStatus] = useState('')
-  const index = Math.max(0, transactions.findIndex((item) => item.hash === t.hash))
-  const amount = t.amount
-  const recipient = t.commitment
-  const contract = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || `0x${'9abcdef0'.repeat(5)}`
-  const event = ['BatchRecorded', 'DistributionVerified', 'RecipientRegistered', 'BatchAudited'][
-    index % 4
-  ]
-  const input = {
-    method: t.method,
-    from: t.address,
-    to: contract,
-    amount,
-    program: t.program,
-    period: formatPeriod(t.periodId),
-    periodId: t.periodId,
-    commitment: t.commitment,
-    refId: t.refId,
-    cid: t.cid,
-  }
+  const txQuery = useExplorerTxQuery(txHash)
+  const tx = txQuery.data
+  const isChainNotConfigured = txQuery.error?.code === 'CHAIN_NOT_CONFIGURED'
+
   async function copyHash() {
     try {
-      await navigator.clipboard.writeText(t.hash)
+      await navigator.clipboard.writeText(tx?.txHash ?? txHash)
       setCopyStatus('Hash disalin')
     } catch {
       setCopyStatus('Gagal menyalin. Silakan salin hash secara manual.')
     }
   }
+
   return (
     <>
       <header className="border-b bg-white">
@@ -72,10 +56,21 @@ export function TransactionDetails({
               />
             </span>
           </Link>
-          <Link href="/explorer" className="flex items-center gap-2 text-xs text-primary">
-            <ArrowLeft size={14} />
-            Explorer
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/transparansi"
+              className="inline-flex min-h-11 items-center text-xs text-primary hover:underline"
+            >
+              Ringkasan publik
+            </Link>
+            <Link
+              href="/explorer"
+              className="inline-flex min-h-11 items-center gap-2 text-xs text-primary hover:underline"
+            >
+              <ArrowLeft size={14} />
+              Explorer
+            </Link>
+          </div>
         </div>
       </header>
       <main
@@ -84,52 +79,85 @@ export function TransactionDetails({
         className="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-9 sm:px-8"
       >
         <div>
-          <nav aria-label="Breadcrumb" className="flex gap-2 text-xs text-muted-foreground">
-            <Link href="/explorer" className="text-primary">
+          <nav
+            aria-label="Breadcrumb"
+            className="flex flex-wrap gap-2 text-xs text-muted-foreground"
+          >
+            <Link href="/explorer" className="text-primary hover:underline">
               Explorer
             </Link>
-            <span>/ Detail transaksi</span><Link href="/transparansi" className="text-primary">Ringkasan publik</Link>
+            <span>/ Detail transaksi /</span>
+            <Link href="/transparansi" className="text-primary hover:underline">
+              Ringkasan publik
+            </Link>
           </nav>
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
             <h1 className="text-3xl font-bold tracking-tight">
               Transaction <span className="text-primary">Details</span>
             </h1>
-            <span className="flex items-center gap-2 rounded-label border bg-secondary px-3 py-1.5 text-xs text-primary">
-              <CheckCircle2 size={14} />
-              Success · ilustrasi
-            </span>
+            {tx && (
+              <span className="flex items-center gap-2 rounded-label border bg-secondary px-3 py-1.5 text-xs text-primary">
+                {tx.status === 'SUCCESS' ? (
+                  <CheckCircle2 size={14} aria-hidden="true" />
+                ) : (
+                  <XCircle size={14} aria-hidden="true" />
+                )}
+                {tx.statusLabel}
+              </span>
+            )}
           </div>
-          <p className="mt-3 text-xs leading-6 text-muted-foreground">
-            Data ilustrasi · Bukan pembacaan jaringan blockchain live. Seluruh alamat, log, dan
-            perubahan state adalah contoh.
-          </p>
         </div>
-        <nav
-          aria-label="Bagian detail transaksi"
-          className="flex gap-2 overflow-x-auto border-b pb-3"
-        >
-          {tabs.map((name) => (
+
+        {isChainNotConfigured && (
+          <div
+            role="alert"
+            className="flex items-center gap-3 rounded-control border border-amber-500/40 bg-amber-50 p-4 text-sm text-amber-900"
+          >
+            <AlertTriangle className="size-5 shrink-0 text-amber-700" aria-hidden="true" />
+            <p className="font-semibold">Jaringan belum tersedia</p>
+          </div>
+        )}
+
+        {txQuery.isLoading ? (
+          <section aria-busy="true" className={panel}>
+            <div className="space-y-3 py-4">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-10 animate-pulse rounded-control bg-secondary" />
+              ))}
+            </div>
+          </section>
+        ) : txQuery.isError || !tx ? (
+          <section role="alert" className={panel}>
+            <p className="text-sm text-muted-foreground">
+              {isChainNotConfigured
+                ? 'Jaringan belum tersedia'
+                : formatApiError(txQuery.error).message}
+            </p>
+            {txQuery.error?.requestId && (
+              <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                ID permintaan: {txQuery.error.requestId}
+              </p>
+            )}
             <button
-              key={name}
-              onClick={() => setTab(name)}
-              aria-current={tab === name ? 'page' : undefined}
-              className={`shrink-0 rounded-control px-4 py-2.5 text-xs font-medium transition-colors ${tab === name ? 'bg-primary text-white' : 'bg-secondary text-muted-foreground hover:text-primary'}`}
+              type="button"
+              onClick={() => void txQuery.refetch()}
+              className="mt-3 min-h-11 rounded-control border px-4 py-2 text-xs text-primary hover:bg-secondary"
             >
-              {name}
+              Coba lagi
             </button>
-          ))}
-        </nav>
-        {tab === 'Overview' && (
+          </section>
+        ) : (
           <>
             <section className={panel} aria-label="Overview">
               <dl>
                 <Row label="Transaction hash">
                   <div className="flex items-start gap-3">
-                    <code className="min-w-0 text-xs">{t.hash}</code>
+                    <code className="min-w-0 font-mono text-xs">{tx.txHash}</code>
                     <button
-                      onClick={copyHash}
+                      type="button"
+                      onClick={() => void copyHash()}
                       aria-label="Salin transaction hash"
-                      className="shrink-0 rounded-control border p-1.5 text-muted-foreground hover:text-primary"
+                      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control border p-2 text-muted-foreground hover:text-primary"
                     >
                       <Copy size={14} />
                     </button>
@@ -139,161 +167,136 @@ export function TransactionDetails({
                   </span>
                 </Row>
                 <Row label="Status">
-                  <span className="inline-flex items-center gap-1.5 rounded-label bg-secondary px-2 py-1 text-xs text-primary">
-                    <CheckCircle2 size={13} />
-                    Success
+                  <span className="inline-flex items-center gap-1.5 rounded-label bg-secondary px-2.5 py-1 text-xs text-primary">
+                    {tx.status === 'SUCCESS' ? (
+                      <CheckCircle2 size={13} aria-hidden="true" />
+                    ) : (
+                      <XCircle size={13} aria-hidden="true" />
+                    )}
+                    {tx.statusLabel} ({tx.status})
                   </span>
                 </Row>
                 <Row label="Block">
                   <Link
-                    href={blocks.some(b => b.id === t.id) ? `/explorer/block/${t.id}` : '/explorer'}
-                    className="text-primary underline underline-offset-4"
+                    href={`/explorer/block/${tx.blockNumber}`}
+                    className="font-mono text-primary underline underline-offset-4"
                   >
-                    #{t.id}
+                    #{tx.blockNumber}
                   </Link>
                   <span className="ml-3 rounded-label border px-2 py-1 text-[10px] text-muted-foreground">
                     QBFT · Finalized
                   </span>
                 </Row>
                 <Row label="Timestamp">
-                  <p>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeStyle: 'medium', timeZone: 'Asia/Makassar' }).format(new Date(t.timestamp))} WITA</p>
-                  <p>{new Date(t.timestamp).toISOString()} UTC</p>
+                  <p className="font-mono text-xs">{tx.wita} WITA</p>
+                  <p className="font-mono text-xs text-muted-foreground">{tx.utc} UTC</p>
                 </Row>
-                <Row label="Confirmations">{index + 1} blok · Finalitas instan (PoA)</Row>
                 <Row label="Otoritas pengirim (From)">
-                  <p>{t.signer}</p>
                   <Link
-                    href={addresses.some(a => a.address.toLowerCase() === t.address.toLowerCase()) ? `/explorer/address/${t.address}` : '/explorer/contract'}
+                    href={`/explorer/address/${tx.from}`}
                     className="font-mono text-xs text-primary hover:underline"
                   >
-                    {t.address}
+                    {tx.from}
                   </Link>
                 </Row>
                 <Row label="Kontrak validasi (To)">
-                  <p>BansosLedger: BansosContract</p>
                   <Link
                     href="/explorer/contract"
                     className="font-mono text-xs text-primary hover:underline"
                   >
-                    {contract}
+                    {tx.to}
                   </Link>
                 </Row>
-                <Row label="Alokasi bantuan (Value)">
-                  <span className="font-medium">
-                    {new Intl.NumberFormat('id-ID', {
-                      style: 'currency',
-                      currency: 'IDR',
-                      maximumFractionDigits: 0,
-                    }).format(amount)}
-                  </span>
-                  <span className="ml-2 text-xs text-muted-foreground">({t.program})</span>
-                </Row>
-                <Row label="Transaction fee">0 ETH · Jaringan permissioned</Row>
-                <Row label="Gas price (PoA fixed)">0.00 Gwei</Row>
               </dl>
             </section>
-            <section className={panel} aria-label="Function called">
-              <h2 className="mb-2 text-sm font-semibold">Function called</h2>
-              <dl>
-                <Row label="Method name">
-                  <code className="rounded-label bg-secondary px-2 py-1 text-xs">{t.method}()</code>
-                </Row>
-                <Row label="Gas used / limit">
-                  125.432 / 300.000 <span className="text-xs text-muted-foreground">(41,81%)</span>
-                </Row>
-                <Row label="Input data (decoded)">
-                  <pre className="overflow-x-auto rounded-control border bg-secondary/40 p-4 text-xs leading-6">
-                    {JSON.stringify(input, null, 2)}
-                  </pre>
-                </Row>
-              </dl>
-            </section>
-            <section className={panel} aria-label="IPFS proof of evidence">
-              <h2 className="mb-2 text-sm font-semibold">IPFS proof of evidence</h2>
-              <dl>
-                <Row label="IPFS hash (proof document)">
-                  {t.evidenceWithdrawn && <span className="mr-3 rounded-label border px-2 py-1 text-xs">DITARIK</span>}
-                  {t.cid ? <a href={`https://ipfs.io/ipfs/${encodeURIComponent(t.cid)}`} target="_blank" rel="noopener noreferrer" className="break-all text-primary underline">{t.cid}</a> : <span className="text-muted-foreground">Belum tersedia — tidak ada dokumen diunggah dalam demo.</span>}
-                  <p className="text-xs text-muted-foreground">CID ilustrasi; ketersediaan berkas tidak dijamin.</p>
-                </Row>
-                <Row label="Evidence type">
-                  Foto bukti penyerahan / dokumen pendukung (ilustrasi)
-                </Row>
-                <Row label="Commitment">
-                  <code>{recipient}</code>
-                </Row>
 
-              </dl>
+            <section className={panel} aria-label="Decoded DisbursementRecorded events">
+              <h2 className="mb-4 text-sm font-semibold">
+                Data penyaluran terdekode ({tx.events.length} event)
+              </h2>
+              {tx.events.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Tidak ada event DisbursementRecorded pada transaksi ini.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-6">
+                  {tx.events.map((ev, idx) => {
+                    const isWithdrawn =
+                      Boolean(ev.cid) &&
+                      (!ev.gatewayUrl ||
+                        ev.cid.toUpperCase().includes('WITHDRAWN') ||
+                        ev.cid.toUpperCase().includes('DITARIK'))
+
+                    return (
+                      <div
+                        key={`${ev.refId}-${idx}`}
+                        className="rounded-control border bg-secondary/20 p-4"
+                      >
+                        <p className="mb-2 font-mono text-xs font-semibold text-primary">
+                          Event #{idx + 1}: DisbursementRecorded
+                        </p>
+                        <dl>
+                          <Row label="Program ID">
+                            <code className="font-mono text-xs">{ev.programId}</code>
+                          </Row>
+                          <Row label="Periode">{ev.periodLabel}</Row>
+                          <Row label="Nominal bantuan">
+                            <span className="font-mono font-semibold">{ev.amountFormatted}</span>
+                          </Row>
+                          <Row label="Commitment penerima">
+                            <code className="font-mono text-xs">{ev.commitment}</code>
+                          </Row>
+                          <Row label="Reference ID (refId)">
+                            <code className="font-mono text-xs">{ev.refId}</code>
+                          </Row>
+                          <Row label="Dicatat oleh (recordedBy)">
+                            <Link
+                              href={`/explorer/address/${ev.recordedBy}`}
+                              className="font-mono text-xs text-primary hover:underline"
+                            >
+                              {ev.recordedBy}
+                            </Link>
+                          </Row>
+                          <Row label="Waktu pencatatan">
+                            <p className="font-mono text-xs">{ev.wita ?? tx.wita} WITA</p>
+                            <p className="font-mono text-xs text-muted-foreground">
+                              {ev.utc ?? tx.utc} UTC
+                            </p>
+                          </Row>
+                          <Row label="Bukti digital (IPFS CID)">
+                            {isWithdrawn && (
+                              <span className="mr-3 inline-block rounded-label border px-2 py-1 font-mono text-xs font-semibold">
+                                DITARIK
+                              </span>
+                            )}
+                            {ev.gatewayUrl && !isWithdrawn ? (
+                              <a
+                                href={ev.gatewayUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="break-all font-mono text-xs text-primary underline"
+                              >
+                                {ev.cid}
+                              </a>
+                            ) : ev.cid ? (
+                              <code className="font-mono text-xs text-muted-foreground">
+                                {ev.cid}
+                              </code>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Tidak ada CID bukti.
+                              </span>
+                            )}
+                          </Row>
+                        </dl>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </section>
           </>
         )}
-        {tab === 'Logs' && (
-          <section className={panel} aria-label="Transaction logs">
-            <h2 className="mb-5 text-sm font-semibold">
-              Transaction logs{' '}
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                2 events · ilustrasi
-              </span>
-            </h2>
-            <div className="flex flex-col gap-4">
-              <div className="rounded-control border bg-secondary/30 p-4">
-                <h3 className="text-sm font-medium text-primary">Event: {event}</h3>
-                <dl>
-                  <Row label="Contract address">
-                    <code className="text-xs">{contract}</code>
-                  </Row>
-                  <Row label="From">
-                    <code className="text-xs">{t.address}</code>
-                  </Row>
-                  <Row label="Commitment">{recipient}</Row>
-                  <Row label="Amount (IDR)">{amount.toLocaleString('id-ID')}</Row>
-                </dl>
-              </div>
-              <div className="rounded-control border bg-secondary/30 p-4">
-                <h3 className="text-sm font-medium text-primary">Event: AuditEntryCreated</h3>
-                <dl>
-                  <Row label="Transaction hash">
-                    <code className="text-xs">{t.hash}</code>
-                  </Row>
-                  <Row label="Status">RECORDED</Row>
-                </dl>
-              </div>
-            </div>
-          </section>
-        )}
-        {tab === 'State Changes' && (
-          <section className={panel} aria-label="State changes">
-            <h2 className="mb-2 text-sm font-semibold">State changes</h2>
-            <p className="mb-5 text-xs text-muted-foreground">
-              Perubahan state smart contract PoA · ilustrasi, bukan hasil execution trace.
-            </p>
-            <div className="flex flex-col gap-4">
-              {[
-                [`BansosContract → records[${recipient}].status`, 'PENDING', 'RECORDED'],
-                ['AuditLog → transactionCount', String(4521 + index), String(4522 + index)],
-              ].map(([field, oldValue, newValue]) => (
-                <div key={field} className="rounded-control border bg-secondary/30 p-4">
-                  <h3 className="break-words text-sm font-medium text-primary">{field}</h3>
-                  <dl>
-                    <Row label="Old value">
-                      <code>{oldValue}</code>
-                    </Row>
-                    <Row label="New value">
-                      <code>{newValue}</code>
-                    </Row>
-                  </dl>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-        <Link
-          href={blocks.some(b => b.id === t.id) ? `/explorer/block/${t.id}?tab=transactions` : '/explorer'}
-          className="flex items-center gap-2 text-sm text-primary"
-        >
-          <ArrowLeft size={15} />
-          {blocks.some(b => b.id === t.id) ? `Kembali ke transaksi dalam blok #${t.id}` : 'Kembali ke explorer'}
-        </Link>
       </main>
     </>
   )

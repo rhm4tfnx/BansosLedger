@@ -31,7 +31,20 @@ import {
 import { apiFetch, buildApiPath, type ApiClientError } from '../client'
 import { queryKeys } from '../keys'
 
-export function useExplorerBlocksQuery(page = 1, limit = 20, enabled = true) {
+export interface ExplorerBlocksQueryOptions {
+  enabled?: boolean
+  refetchInterval?: number | false
+  initialData?: PaginatedResult<ExplorerBlockViewModel>
+}
+
+export function useExplorerBlocksQuery(
+  page = 1,
+  limit = 20,
+  options: boolean | ExplorerBlocksQueryOptions = true,
+) {
+  const resolved: ExplorerBlocksQueryOptions =
+    typeof options === 'boolean' ? { enabled: options } : options
+  const { enabled = true, refetchInterval = 10_000, initialData } = resolved
   return useQuery<PaginatedResult<ExplorerBlockViewModel>, ApiClientError>({
     queryKey: queryKeys.explorer.blocks(page, limit),
     queryFn: async ({ signal }) => {
@@ -43,6 +56,9 @@ export function useExplorerBlocksQuery(page = 1, limit = 20, enabled = true) {
       return toExplorerBlockListViewModel(dto)
     },
     enabled,
+    refetchInterval,
+    refetchIntervalInBackground: false,
+    ...(initialData !== undefined ? { initialData } : {}),
   })
 }
 

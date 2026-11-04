@@ -25,6 +25,8 @@ const PUBLIC_STATUS_LABELS: Record<string, string> = {
   FAILED: 'Gagal',
   ENROLLED: 'Terdaftar',
   REGISTERED_ONCHAIN: 'Terdaftar On-Chain',
+  SUDAH_DISALURKAN: 'Sudah disalurkan',
+  BELUM_DISALURKAN: 'Belum disalurkan',
 }
 
 export function toPublicSummaryViewModel(dto: PublicSummaryDto): PublicSummaryViewModel {

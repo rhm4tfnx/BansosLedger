@@ -26,7 +26,15 @@ import { queryKeys } from '../keys'
 
 const publicProgramsListSchema = listEnvelope(publicProgramDtoSchema)
 
-export function usePublicSummaryQuery(enabled = true) {
+export interface PublicSummaryQueryOptions {
+  enabled?: boolean
+  initialData?: PublicSummaryViewModel
+}
+
+export function usePublicSummaryQuery(options: boolean | PublicSummaryQueryOptions = true) {
+  const resolved: PublicSummaryQueryOptions =
+    typeof options === 'boolean' ? { enabled: options } : options
+  const { enabled = true, initialData } = resolved
   return useQuery<PublicSummaryViewModel, ApiClientError>({
     queryKey: queryKeys.public.summary(),
     queryFn: async ({ signal }) => {
@@ -37,6 +45,7 @@ export function usePublicSummaryQuery(enabled = true) {
       return toPublicSummaryViewModel(dto)
     },
     enabled,
+    ...(initialData !== undefined ? { initialData } : {}),
   })
 }
 
@@ -45,10 +54,11 @@ export interface PublicProgramsQueryFilters {
   limit?: number
   sort?: string
   enabled?: boolean
+  initialData?: PaginatedResult<PublicProgramViewModel>
 }
 
 export function usePublicProgramsQuery(filters: PublicProgramsQueryFilters = {}) {
-  const { enabled = true, ...queryFilters } = filters
+  const { enabled = true, initialData, ...queryFilters } = filters
   return useQuery<PaginatedResult<PublicProgramViewModel>, ApiClientError>({
     queryKey: queryKeys.public.programs(queryFilters),
     queryFn: async ({ signal }) => {
@@ -60,15 +70,24 @@ export function usePublicProgramsQuery(filters: PublicProgramsQueryFilters = {})
       return toPublicProgramListViewModel(dto)
     },
     enabled,
+    ...(initialData !== undefined ? { initialData } : {}),
   })
+}
+
+export interface PublicProgramDetailQueryOptions {
+  enabled?: boolean
+  initialData?: PublicProgramDetailViewModel
 }
 
 export function usePublicProgramDetailQuery(
   code: string | null | undefined,
   page = 1,
   limit = 20,
-  enabled = true,
+  options: boolean | PublicProgramDetailQueryOptions = true,
 ) {
+  const resolved: PublicProgramDetailQueryOptions =
+    typeof options === 'boolean' ? { enabled: options } : options
+  const { enabled = true, initialData } = resolved
   return useQuery<PublicProgramDetailViewModel, ApiClientError>({
     queryKey: queryKeys.public.programDetail(code ?? '', page, limit),
     queryFn: async ({ signal }) => {
@@ -83,6 +102,7 @@ export function usePublicProgramDetailQuery(
       return toPublicProgramDetailViewModel(dto)
     },
     enabled: Boolean(code) && enabled,
+    ...(initialData !== undefined ? { initialData } : {}),
   })
 }
 
@@ -93,6 +113,8 @@ export interface PublicStatusCheckInput {
 
 export function usePublicStatusCheckMutation() {
   return useMutation<PublicStatusCheckViewModel, ApiClientError, PublicStatusCheckInput>({
+    gcTime: 0,
+    retry: false,
     mutationFn: async (input) => {
       const dto = await apiFetch('/api/v1/public/status-check', {
         method: 'POST',

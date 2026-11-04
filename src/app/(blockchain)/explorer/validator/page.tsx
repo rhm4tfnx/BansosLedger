@@ -1,3 +1,13 @@
+import type { Metadata } from 'next'
 import { ValidatorDetails } from '@/components/features/explorer/validator-details'
-export const metadata = { title: 'Validator | BansosLedger', description: 'Empat validator institusional dan blok terakhir yang diusulkan.' }
-export default function Page() { return <ValidatorDetails /> }
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: 'Validator | BansosLedger',
+    description: 'Daftar validator institusional pada jaringan konsorsium QBFT BansosLedger.',
+  }
+}
+
+export default function Page() {
+  return <ValidatorDetails />
+}
