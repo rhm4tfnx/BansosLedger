@@ -68,7 +68,7 @@ export function AddressDetails({ wallet: w }: { wallet: ExplorerAddress }) {
           <Link href="/explorer" className="text-primary">
             Explorer
           </Link>{' '}
-          / Detail address
+            / Detail address <Link href="/transparansi" className="text-primary">Ringkasan publik</Link>
         </nav>
         <div className="border-b pb-6">
           <div className="flex flex-wrap items-center gap-3">

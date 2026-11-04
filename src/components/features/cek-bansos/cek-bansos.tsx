@@ -1,33 +1,49 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import Link from 'next/link'
+import { formatPeriod } from '@/lib/utils'
+import { TurnstileWidget } from './turnstile-widget'
 import { ArrowUpRight, CheckCircle2, ShieldCheck } from 'lucide-react'
 
-const demoResult = {
-  name: 'Sitti Aminah',
-  nik: '731107******0001',
-  program: 'Bantuan Pangan Non-Tunai (BPNT) Periode III / 2026',
-  status: 'Berhasil disalurkan',
-  amount: 'Rp1.500.000,00',
-  date: '07 Agustus 2026',
-  txid: '0x8f4c2b9a1e3f5d7c8b0a1f2e3d4c5b6a7f8e9d0c1b2a3f4e5d6c7b8a9f0e1d2',
+import { initialRecipients } from '@/mocks/recipient-data'
+import { initialRows } from '@/mocks/disbursement-data'
+
+type StatusEntry = { program: string; period: string; status: 'Sudah disalurkan' | 'Belum disalurkan'; txHash?: string }
+type StatusResult = { name: string; entries: StatusEntry[] }
+
+// TODO(PRD FR-PUB-04): replace with POST /api/v1/public/status-check (NIK in the JSON body, never in the URL)
+function lookupStatus(nik: string): StatusResult | null {
+  const recipient = initialRecipients.find(r => r.nik === nik && r.status === 'FINAL' && !r.deleted)
+  if (!recipient) return null
+  const entries: StatusEntry[] = initialRows
+    .filter(row => row.recipient === recipient.id && row.status === 'SUCCESS')
+    .slice(0, 10)
+    .map(row => ({ program: row.program, period: row.period || formatPeriod(row.periodId), status: 'Sudah disalurkan', txHash: row.hash }))
+  return { name: recipient.name, entries: entries.length ? entries : [{ program: '—', period: '—', status: 'Belum disalurkan' }] }
+}
+
+let sessionAttempts: number[] = []
+function consumeAttempt() {
+  const now = Date.now()
+  try {
+    const saved: unknown = JSON.parse(sessionStorage.getItem('status-check-attempts') || '[]')
+    if (Array.isArray(saved)) sessionAttempts = saved.filter((t): t is number => typeof t === 'number' && Number.isFinite(t))
+  } catch { /* Storage may be blocked; retain the in-memory session limit. */ }
+  sessionAttempts = sessionAttempts.filter(t => t > now - 600000)
+  if (sessionAttempts.length >= 5) return false
+  sessionAttempts.push(now)
+  try { sessionStorage.setItem('status-check-attempts', JSON.stringify(sessionAttempts)) } catch { /* Only attempt timestamps are persisted, never input or results. */ }
+  return true
 }
 
 export function CekBansos() {
   const [nik, setNik] = useState('')
-  const [result, setResult] = useState<typeof demoResult | null>(null)
+  const [captchaOk, setCaptchaOk] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  const [resultVersion, setResultVersion] = useState(0)
-
-  function updateResult(normalizedNik: string) {
-    setError('')
-    setResult({
-      ...demoResult,
-      nik: `${normalizedNik.slice(0, 6)}******${normalizedNik.slice(-4)}`,
-    })
-    setResultVersion((version) => version + 1)
-  }
+  const [checked, setChecked] = useState<{ nik: string; result: StatusResult | null } | null>(null)
+  const submitting = useRef(false)
 
   function handleNikChange(value: string) {
     const normalizedNik = value.replace(/\D/g, '').slice(0, 16)
@@ -35,14 +51,27 @@ export function CekBansos() {
     setError('')
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (nik.length !== 16) {
-      setResult(null)
+    if (submitting.current) return
+    if (!/^\d{16}$/.test(nik)) {
+      setChecked(null)
       setError('NIK harus terdiri dari 16 digit angka.')
       return
     }
-    updateResult(nik)
+    if (!captchaOk) { setError('Selesaikan verifikasi CAPTCHA terlebih dahulu.'); return }
+    if (!consumeAttempt()) { setError('Terlalu banyak percobaan. Coba lagi beberapa menit lagi.'); return }
+    const submittedNik = nik
+    submitting.current = true
+    setError('')
+    setChecked(null)
+    setLoading(true)
+    await new Promise(resolve => setTimeout(resolve, 800))
+    const result = lookupStatus(submittedNik)
+    setChecked({ nik: submittedNik, result })
+    if (!result) setError('Data tidak ditemukan.')
+    setLoading(false)
+    submitting.current = false
   }
 
   return (
@@ -67,7 +96,7 @@ export function CekBansos() {
           </div>
         </header>
 
-        <form onSubmit={handleSubmit} className="mt-8 border bg-surface p-5 min-[641px]:p-7">
+        <form method="post" onSubmit={handleSubmit} className="mt-8 border bg-surface p-5 min-[641px]:p-7">
           <label htmlFor="nik" className="mb-3 block font-sans text-sm font-medium">
             Nomor Induk Kependudukan (NIK)
           </label>
@@ -84,11 +113,15 @@ export function CekBansos() {
               aria-describedby={error ? 'nik-error' : 'nik-help'}
               className="min-w-0 flex-1 border bg-background px-4 py-3 font-mono text-sm outline-none transition-colors focus:border-primary"
             />
+          </div>
+          <TurnstileWidget onVerify={token => setCaptchaOk(Boolean(token))} />
+          <div className="mt-3 flex flex-col gap-3 min-[641px]:flex-row">
             <button
               type="submit"
-              className="bg-primary px-6 py-3 font-sans text-sm font-medium text-white transition-colors hover:bg-primary-hover"
+              disabled={!captchaOk || loading}
+              className="bg-primary px-6 py-3 font-sans text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Cek Status
+              {loading ? 'Memeriksa…' : 'Cek Status'}
             </button>
           </div>
           {error ? (
@@ -100,42 +133,46 @@ export function CekBansos() {
               Gunakan NIK 16 digit. Data yang ditampilkan adalah simulasi.
             </p>
           )}
+          <p aria-live="polite" className="sr-only">{loading ? 'Memeriksa…' : error || (checked?.result ? 'Hasil verifikasi tersedia.' : '')}</p>
         </form>
+        <p className="mt-3 font-mono text-xs text-body-copy">Hasil menampilkan NIK yang Anda ketik, nama lengkap, program, periode, status, dan TxHash. Alamat dan nomor telepon tidak pernah ditampilkan.</p>
+        <p className="mt-3 font-mono text-xs text-body-copy">Mode demo: data simulasi. Versi produksi akan memakai verifikasi server dengan pembatasan percobaan.</p>
+
+        <Link href="/cara-verifikasi" className="mt-3 inline-flex font-mono text-xs text-primary-hover hover:underline">Cara memeriksa transaksi</Link>
 
         <section aria-labelledby="hasil-verifikasi" className="mt-8">
           <h2 id="hasil-verifikasi" className="mb-5 font-sans text-2xl font-medium tracking-tight">
             hasil-verifikasi/
           </h2>
-          {result ? (
+          {checked?.result ? (
             <div
-              key={resultVersion}
-              data-result-version={resultVersion}
               data-reveal
               className="border bg-surface p-5 min-[641px]:p-8"
             >
               <div className="grid gap-7 min-[769px]:grid-cols-2 min-[769px]:gap-x-12 min-[769px]:gap-y-8">
-                <Info label="Nama penerima" value={result.name} emphasis />
-                <Info label="NIK (disamarkan)" value={result.nik} mono />
-                <Info label="Program bantuan" value={result.program} />
-                <Info label="Status penyaluran" value={result.status} badge />
-                <Info label="Jumlah bantuan" value={result.amount} />
-                <Info label="Tanggal penyaluran" value={result.date} />
+                <Info label="Nama penerima" value={checked.result.name} emphasis />
+                <Info label="NIK" value={checked.nik} mono />
+                {checked.result.entries.map((entry, index) => (
+                  <div key={index} className="grid gap-7 min-[769px]:col-span-2 min-[769px]:grid-cols-2 min-[769px]:gap-x-12 min-[769px]:gap-y-8">
+                    <Info label="Program bantuan" value={entry.program} />
+                    <Info label="Periode" value={entry.period} />
+                    <Info label="Status penyaluran" value={entry.status} badge />
+                  </div>
+                ))}
               </div>
+              <p className="mt-7 border p-3 font-mono text-xs text-body-copy">Jangan bagikan tangkapan layar halaman ini karena memuat NIK dan nama lengkap.</p>
               <div className="mt-8 border-t pt-7">
                 <p className="mb-3 font-mono text-xs uppercase tracking-wide text-body-copy">
                   Blockchain audit trail (txid)
                 </p>
-                <div className="flex flex-col gap-3 border bg-background px-3 py-3 min-[641px]:flex-row min-[641px]:items-center min-[641px]:justify-between">
-                  <code className="break-all font-mono text-[10px] text-primary-hover">
-                    {result.txid}
-                  </code>
-                  <a
-                    href="#"
-                    className="inline-flex shrink-0 items-center gap-1 font-mono text-xs text-primary-hover hover:underline"
-                  >
-                    Lihat di Explorer <ArrowUpRight aria-hidden="true" className="size-3" />
-                  </a>
-                </div>
+                {checked.result.entries.map((entry, index) => (
+                  <div key={index} className="flex flex-col gap-3 border bg-background px-3 py-3 min-[641px]:flex-row min-[641px]:items-center min-[641px]:justify-between">
+                    <code className="break-all font-mono text-[10px] text-primary-hover">{entry.txHash || 'Belum ada transaksi'}</code>
+                    {entry.txHash && <Link prefetch={false} href={`/explorer/tx/${entry.txHash}`} className="inline-flex shrink-0 items-center gap-1 font-mono text-xs text-primary-hover hover:underline">
+                      Lihat di Explorer <ArrowUpRight aria-hidden="true" className="size-3" />
+                    </Link>}
+                  </div>
+                ))}
               </div>
             </div>
           ) : (

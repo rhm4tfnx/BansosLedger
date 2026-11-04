@@ -1,6 +1,12 @@
+import { requirePermission, integrationUnavailable } from '@/lib/auth/authorization'
 export const runtime = 'nodejs'
-
-// Internal authenticated read endpoint. Append-only events must originate from server mutations.
 export async function GET() {
-  return Response.json({ error: 'INTEGRATION_NOT_CONFIGURED', message: 'Autentikasi dan repositori audit belum dihubungkan.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } })
+  const auth = await requirePermission('audit:read')
+  if (auth.response) return auth.response
+  return integrationUnavailable()
+}
+export async function POST() {
+  const auth = await requirePermission('dashboard:read')
+  if (auth.response) return auth.response
+  return integrationUnavailable()
 }

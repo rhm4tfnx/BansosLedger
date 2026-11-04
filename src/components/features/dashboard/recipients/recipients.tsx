@@ -1,5 +1,6 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useRoleAccess } from '@/hooks/use-role-access'
 import { appendAudit } from '@/stores/audit-store'
 import {
   Users,
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react'
 import {
   initialRecipients,
-  commitment,
+  demoHash,
   masked,
   money,
   programs,
@@ -29,12 +30,10 @@ import { RecipientDialog } from '@/components/features/dashboard/recipients/reci
 import { RecipientForm } from '@/components/features/dashboard/recipients/recipient-form'
 import { RecipientImport } from '@/components/features/dashboard/recipients/recipient-import'
 import s from '@/components/features/dashboard/recipients/recipients.module.css'
-const tabs = ['Semua Aktif', 'DRAFT', 'TERVERIFIKASI', 'FINAL', 'Soft Deleted']
-export function Recipients({
-  role = 'operator',
-}: {
-  role?: 'operator' | 'kecamatan' | 'dinas-sosial'
-}) {
+let revealTimestamps: number[] = []
+const tabs = ['Semua Aktif', 'DRAFT', 'FINAL', 'Soft Deleted']
+export function Recipients() {
+  const { can, meta } = useRoleAccess()
   const [rows, setRows] = useState(initialRecipients)
   const [tab, setTab] = useState('Semua Aktif')
   const [program, setProgram] = useState('')
@@ -45,6 +44,9 @@ export function Recipients({
   const [modal, setModal] = useState<'add' | 'edit' | 'import' | 'detail' | 'confirm' | null>(null)
   const [selected, setSelected] = useState<Recipient>()
   const [action, setAction] = useState('')
+  const [reason, setReason] = useState('')
+  const revealTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  useEffect(() => { const timers = revealTimers.current; return () => { timers.forEach(clearTimeout); timers.clear() } }, [])
   const [revealed, setRevealed] = useState<string[]>([])
   const [notice, setNotice] = useState('')
   const active = rows.filter((r) => !r.deleted)
@@ -61,7 +63,7 @@ export function Recipients({
         : !r.deleted && (tab === 'Semua Aktif' || r.status === tab)) &&
       (!program || r.program === program) &&
       (!region || r.region === region) &&
-      `${r.name} ${r.nik} ${commitment(r.nik)} ${r.region}`
+      `${r.name} ${r.nik} ${demoHash(r.id)} ${r.region}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   )
@@ -72,12 +74,7 @@ export function Recipients({
     appendAudit({
       action: text.replace(/\b\d{16}\b/g, '[NIK disamarkan]'),
       category: /NIK/i.test(text) ? 'Akses NIK / PII' : 'CRUD & draft',
-      role:
-        role === 'operator'
-          ? 'Operator Kelurahan'
-          : role === 'kecamatan'
-            ? 'Kecamatan Balusu'
-            : 'Dinas Sosial Kab. Barru',
+      role: meta?.shortLabel ?? 'Belum Login',
       dataId,
       diff,
       source: 'Halaman penerima · simulasi',
@@ -88,31 +85,46 @@ export function Recipients({
   }
   function confirm(r: Recipient, a: string) {
     setAction(a)
+    setReason('')
     select(r, 'confirm')
   }
   function transition() {
-    if (!selected || role !== 'operator') return
+    if (!selected || !can(action === 'Soft Delete' ? 'recipient:soft-delete' : action === 'Pulihkan' ? 'recipient:update' : 'recipient:update')) return
+    if ((action === 'Soft Delete' || action === 'Pulihkan') && selected.status !== 'DRAFT') return
+    if (action === 'Soft Delete' && !reason.trim()) return
     setRows((all) =>
       all.map((r) => {
         if (r.id !== selected.id) return r
-        if (action === 'Verifikasi' && r.status === 'DRAFT' && !r.deleted)
-          return { ...r, status: 'TERVERIFIKASI' }
-        if (action === 'Kunci FINAL' && r.status === 'TERVERIFIKASI' && !r.deleted)
-          return { ...r, status: 'FINAL', identityHash: commitment(r.nik) }
+        if (action === 'Kunci FINAL' && r.status === 'DRAFT' && !r.deleted)
+          return { ...r, status: 'FINAL', identityHash: demoHash(r.id) }
         if (action === 'Soft Delete' && r.status === 'DRAFT') return { ...r, deleted: true }
         if (action === 'Pulihkan' && r.deleted) return { ...r, deleted: false }
         return r
       }),
     )
-    log(`${action}: ${selected.name}`)
+    log(`${action}: ${selected.name}`, selected.id, action === 'Soft Delete' ? { alasan: reason.trim().replace(/\b\d{16}\b/g, '[NIK disamarkan]') } : {})
     setNotice(`${action} berhasil dalam simulasi. Tidak ada transaksi blockchain yang dikirim.`)
     setModal(null)
   }
   function reveal(r: Recipient) {
-    if (role !== 'operator') return
+    if (!can('recipient:reveal-nik')) return
+    clearTimeout(revealTimers.current.get(r.id))
+    revealTimers.current.delete(r.id)
     if (revealed.includes(r.id)) setRevealed((x) => x.filter((id) => id !== r.id))
     else {
+      const now = Date.now()
+      revealTimestamps = revealTimestamps.filter(time => now - time < 3600000)
+      if (revealTimestamps.length >= 30) {
+        setNotice('Batas pembukaan NIK 30 kali per jam tercapai. Coba lagi nanti.')
+        log('Pembukaan NIK ditolak: batas 30 kali per jam tercapai', r.id)
+        return
+      }
+      revealTimestamps.push(now)
       setRevealed((x) => [...x, r.id])
+      revealTimers.current.set(r.id, setTimeout(() => {
+        setRevealed(x => x.filter(id => id !== r.id))
+        revealTimers.current.delete(r.id)
+      }, 30000))
       log(`Akses NIK lengkap: ${r.name}`, r.id)
     }
   }
@@ -121,8 +133,8 @@ export function Recipients({
       <div className={s.stats}>
         {[
           { label: 'Total penerima aktif', value: active.length, icon: Users },
-          { label: 'Menunggu verifikasi', value: count('DRAFT'), icon: FilePenLine },
-          { label: 'Terverifikasi', value: count('TERVERIFIKASI'), icon: UserCheck },
+          { label: 'Draft (belum final)', value: count('DRAFT'), icon: FilePenLine },
+          { label: 'Memiliki hash', value: active.filter(r => r.status === 'FINAL' && r.identityHash).length, icon: UserCheck },
           { label: 'Final & terkunci', value: count('FINAL'), icon: LockKeyhole },
         ].map((item) => (
           <section key={item.label}>
@@ -150,17 +162,17 @@ export function Recipients({
               Daftar Penerima Bantuan Sosial <span>Kelurahan Takkalasi</span>
             </h2>
             <p>
-              Klik ikon mata untuk melihat NIK lengkap. Akses operator dicatat pada log aktivitas
+              Klik ikon mata untuk melihat NIK lengkap. Akses pengguna dicatat pada log aktivitas
               simulasi.
             </p>
           </div>
           <div className={s.actions}>
-            <button disabled={role !== 'operator'} onClick={() => setModal('import')}>
-              <Upload size={16} /> Impor CSV (P2)
+            <button disabled={!can('recipient:create')} onClick={() => setModal('import')}>
+              <Upload size={16} /> Impor CSV
             </button>
             <button
               className={s.primary}
-              disabled={role !== 'operator'}
+              disabled={!can('recipient:create')}
               onClick={() => {
                 setSelected(undefined)
                 setModal('add')
@@ -258,7 +270,7 @@ export function Recipients({
                     <div className={s.nik}>
                       <code>{revealed.includes(r.id) ? r.nik : masked(r.nik)}</code>
                       <button
-                        disabled={role !== 'operator'}
+                        disabled={!can('recipient:reveal-nik')}
                         aria-label={`${revealed.includes(r.id) ? 'Sembunyikan' : 'Buka'} NIK ${r.name}`}
                         onClick={() => reveal(r)}
                       >
@@ -318,28 +330,21 @@ export function Recipients({
                   <td>
                     <div className={s.rowActions}>
                       <button onClick={() => select(r, 'detail')}>Detail</button>
-                      {role === 'operator' &&
+                      {can('recipient:update') &&
                         (r.deleted ? (
                           <button onClick={() => confirm(r, 'Pulihkan')}>Pulihkan</button>
                         ) : r.status === 'DRAFT' ? (
                           <>
                             <button
                               className={s.secondary}
-                              onClick={() => confirm(r, 'Verifikasi')}
+                              onClick={() => confirm(r, 'Kunci FINAL')}
                             >
-                              Verifikasi <ArrowRight size={13} />
+                              Kunci FINAL <ArrowRight size={13} />
                             </button>
                             <button onClick={() => select(r, 'edit')}>Edit</button>
-                            <button className={s.danger} onClick={() => confirm(r, 'Soft Delete')}>
+                            <button disabled={!can('recipient:soft-delete')} className={s.danger} onClick={() => confirm(r, 'Soft Delete')}>
                               Soft Delete
                             </button>
-                          </>
-                        ) : r.status === 'TERVERIFIKASI' ? (
-                          <>
-                            <button className={s.green} onClick={() => confirm(r, 'Kunci FINAL')}>
-                              <LockKeyhole size={13} /> Kunci FINAL
-                            </button>
-                            <small>Edit/Hapus Terkunci</small>
                           </>
                         ) : (
                           <span className={s.locked}>
@@ -406,7 +411,8 @@ export function Recipients({
           editing={modal === 'edit' ? selected : undefined}
           onClose={() => setModal(null)}
           onSave={(r) => {
-            if (role !== 'operator') return
+            if (!can(modal === 'edit' ? 'recipient:update' : 'recipient:create')) return
+            if (modal === 'edit' && rows.find(item => item.id === r.id)?.status !== 'DRAFT') return
             setRows((all) =>
               all.some((x) => x.id === r.id)
                 ? all.map((x) => (x.id === r.id && x.status === 'DRAFT' ? r : x))
@@ -428,7 +434,7 @@ export function Recipients({
           existing={rows}
           onClose={() => setModal(null)}
           onSave={(data) => {
-            if (role !== 'operator') return
+            if (!can('recipient:create')) return
             setRows((all) => [...all, ...data])
             log(`Impor CSV: ${data.length} penerima DRAFT`)
             setNotice(`${data.length} baris valid berhasil diimpor.`)
@@ -523,9 +529,10 @@ export function Recipients({
                   : 'Perubahan ini hanya berlaku pada data dummy sesi ini.'}
             </p>
           </div>
+          {action === 'Soft Delete' && <div className={s.formBody}><label>Alasan<textarea required value={reason} onChange={e => setReason(e.target.value)} /></label></div>}
           <footer>
             <button onClick={() => setModal(null)}>Batal</button>
-            <button className={s.primary} onClick={transition}>
+            <button className={s.primary} disabled={action === 'Soft Delete' && !reason.trim()} onClick={transition}>
               Konfirmasi {action}
             </button>
           </footer>

@@ -1,0 +1,108 @@
+import 'server-only'
+import { z } from 'zod'
+import { createHash } from 'node:crypto'
+import type { FilterQuery } from 'mongoose'
+import { Recipients, Enrollments, Disbursements, RateLimits } from '@/lib/db/models'
+import { encryptNik, decryptNik, nikBlindIndex, maskNik, validateNik, type EncryptedNik } from '@/lib/crypto/nik'
+import { recipientCommitment } from '@/lib/blockchain/identity-hash'
+import { toRecipientDto } from './dto'
+import { DomainError, audit, body, conflict, duplicate, escapeSearch, idSchema, json, notFound, oid, pageQuery, query, reasonSchema, type DomainContext } from '../domain/http'
+
+export const recipientInput = z.object({ nik: z.string().refine(validateNik), name: z.string().trim().min(2).max(160), address: z.object({ dusun: z.string().trim().min(1).max(100), rt: z.string().regex(/^\d{1,3}$/), rw: z.string().regex(/^\d{1,3}$/) }).strict(), phone: z.string().regex(/^\+?[0-9 -]{7,20}$/).optional() }).strict()
+export const recipientProjection = '_id nikMasked name address phone status commitment createdAt updatedAt finalizedAt'
+function encryptedFields(nik: string) { return { nikEnc: encryptNik(nik), nikBlindIndex: nikBlindIndex(nik), nikMasked: maskNik(nik) } }
+function duplicateNik(error: unknown): never { if (duplicate(error)) throw new DomainError(409, 'DUPLICATE_NIK', 'NIK sudah terdaftar'); throw error }
+export async function list(ctx: DomainContext) {
+  const paging = pageQuery(ctx.request, ['createdAt', 'updatedAt', 'name', 'status'])
+  const input = z.object({ search: z.string().trim().max(160).optional(), status: z.enum(['DRAFT', 'FINAL']).optional(), program: idSchema.optional(), dusun: z.string().max(100).optional(), rt: z.string().regex(/^\d{1,3}$/).optional(), rw: z.string().regex(/^\d{1,3}$/).optional() }).parse(query(ctx.request))
+  const filter: FilterQuery<unknown> = { deletedAt: null }
+  if (input.status) filter.status = input.status
+  for (const field of ['dusun', 'rt', 'rw'] as const) if (input[field]) filter[`address.${field}`] = input[field]
+  if (input.search) {
+    if (/^\d{16}$/.test(input.search)) { if (!validateNik(input.search)) return json({ data: [], total: 0, page: paging.page, limit: paging.limit }); filter.nikBlindIndex = nikBlindIndex(input.search) }
+    else filter.name = { $regex: escapeSearch(input.search), $options: 'i' }
+  }
+  if (input.program) filter._id = { $in: await Enrollments.find({ programId: oid(input.program) }).distinct('recipientId') }
+  const [data, total] = await Promise.all([Recipients.find(filter).select(recipientProjection).sort(paging.sort).skip(paging.skip).limit(paging.limit).lean(), Recipients.countDocuments(filter)])
+  return json({ data: data.map(toRecipientDto), total, page: paging.page, limit: paging.limit, totalPages: Math.ceil(total / paging.limit) })
+}
+export async function create(ctx: DomainContext) {
+  const { nik, ...input } = await body(ctx.request, recipientInput)
+  let row
+  try { row = await Recipients.create({ ...input, ...encryptedFields(nik), createdBy: ctx.actor.userId, status: 'DRAFT' }) } catch (error) { duplicateNik(error) }
+  await audit(ctx, 'RECIPIENT_CREATED', 'recipients', String(row._id))
+  const created = await Recipients.findById(row._id).select(recipientProjection).lean()
+  return json(toRecipientDto(created), 201)
+}
+export async function detail(ctx: DomainContext) {
+  const row = await Recipients.findOne({ _id: oid(ctx.params.id), deletedAt: null }).select(recipientProjection).lean()
+  if (!row) notFound()
+  const paging = pageQuery(ctx.request, ['createdAt', 'periodId', 'amount'])
+  const filter = { recipientId: row._id, deletedAt: null }
+  const [data, total] = await Promise.all([Disbursements.find(filter).select('refId programId periodId amount status disbursedDate chain createdAt').sort(paging.sort).skip(paging.skip).limit(paging.limit).lean(), Disbursements.countDocuments(filter)])
+  return json({
+    ...toRecipientDto(row),
+    history: {
+      data: data.map(item => ({
+        id: String((item as any)._id ?? (item as any).id),
+        refId: item.refId,
+        programId: String(item.programId),
+        periodId: item.periodId,
+        amount: item.amount,
+        status: item.status,
+        disbursedDate: item.disbursedDate ? (item.disbursedDate instanceof Date ? item.disbursedDate.toISOString() : String(item.disbursedDate)) : null,
+        chain: item.chain ?? null,
+        createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : String(item.createdAt ?? new Date().toISOString()),
+      })),
+      total,
+      page: paging.page,
+      limit: paging.limit,
+      totalPages: Math.ceil(total / paging.limit),
+    },
+  })
+}
+export async function update(ctx: DomainContext) {
+  const patch = await body(ctx.request, recipientInput.partial().refine(value => Object.keys(value).length > 0))
+  const { nik, ...rest } = patch
+  let row
+  try { row = await Recipients.findOneAndUpdate({ _id: oid(ctx.params.id), deletedAt: null, status: 'DRAFT' }, { $set: { ...rest, ...(nik ? encryptedFields(nik) : {}) } }, { new: true, runValidators: true }).select(recipientProjection).lean() } catch (error) { duplicateNik(error) }
+  if (!row) conflict()
+  await audit(ctx, 'RECIPIENT_UPDATED', 'recipients', ctx.params.id)
+  return json(toRecipientDto(row))
+}
+export async function softDelete(ctx: DomainContext) {
+  const { reason } = await body(ctx.request, reasonSchema)
+  const result = await Recipients.updateOne({ _id: oid(ctx.params.id), status: 'DRAFT', deletedAt: null }, { $set: { deletedAt: new Date(), deletedBy: ctx.actor.userId, deletedReason: reason } })
+  if (!result.modifiedCount) conflict()
+  await audit(ctx, 'RECIPIENT_SOFT_DELETED', 'recipients', ctx.params.id, { reason })
+  return json({ ok: true })
+}
+function readEncrypted(value: unknown): EncryptedNik {
+  return z.object({ iv: z.string(), tag: z.string(), ct: z.string(), keyVersion: z.literal('v1') }).parse(value)
+}
+export async function finalize(ctx: DomainContext) {
+  await body(ctx.request, z.object({}).strict())
+  const row = await Recipients.findOne({ _id: oid(ctx.params.id), deletedAt: null }).lean()
+  if (!row) notFound()
+  if (row.status !== 'DRAFT') conflict()
+  const commitment = recipientCommitment(decryptNik(readEncrypted(row.nikEnc)))
+  const result = await Recipients.findOneAndUpdate({ _id: row._id, status: 'DRAFT', deletedAt: null, updatedAt: row.updatedAt, nikBlindIndex: row.nikBlindIndex }, { $set: { commitment, status: 'FINAL', finalizedAt: new Date(), finalizedBy: ctx.actor.userId } }, { new: true }).select(recipientProjection).lean()
+  if (!result) conflict('RECORD_CHANGED', 'Data berubah. Muat ulang sebelum finalisasi.')
+  await audit(ctx, 'RECIPIENT_FINALIZED', 'recipients', ctx.params.id)
+  return json(toRecipientDto(result))
+}
+export async function reveal(ctx: DomainContext) {
+  await body(ctx.request, z.object({}).strict())
+  const now = Date.now(), window = 3600000, bucket = Math.floor(now / window)
+  const expiresAt = new Date((bucket + 1) * window)
+  const key = createHash('sha256').update(`reveal:${ctx.actor.userId}:${bucket}`).digest('hex')
+  let rate
+  try { rate = await RateLimits.findOneAndUpdate({ _id: key }, { $inc: { count: 1 }, $setOnInsert: { expiresAt } }, { upsert: true, new: true }) }
+  catch (error) { if (!duplicate(error)) throw error; rate = await RateLimits.findOneAndUpdate({ _id: key }, { $inc: { count: 1 } }, { new: true }) }
+  if (!rate || rate.count > 30) throw new DomainError(429, 'REVEAL_LIMIT', 'Batas pembukaan NIK tercapai.', Math.max(1, Math.ceil((expiresAt.getTime() - now) / 1000)))
+  const row = await Recipients.findOne({ _id: oid(ctx.params.id), deletedAt: null }).select('nikEnc').lean()
+  if (!row) notFound()
+  const nik = decryptNik(readEncrypted(row.nikEnc))
+  await audit(ctx, 'REVEAL_NIK', 'recipients', ctx.params.id, { recipientId: ctx.params.id })
+  return json({ nik })
+}

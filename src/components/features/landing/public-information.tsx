@@ -19,7 +19,7 @@ const transactions = [
   {
     time: '12:15:30',
     hash: '0x4c21…e582',
-    program: 'PKH Tahap II',
+    program: 'PKH',
     amount: 'Rp750.000',
     evidence: 'DOC-002',
   },
@@ -192,7 +192,7 @@ export function PublicInformation() {
           </div>
           <p className="flex items-start gap-3 border-t p-6 font-mono text-[10px] leading-5 text-body-copy">
             <ShieldCheck aria-hidden="true" className="size-4 shrink-0 text-primary-hover" />
-            Informasi publik tidak menampilkan NIK, alamat lengkap, atau data pribadi penerima.
+            Buku besar publik tidak menampilkan NIK, alamat lengkap, atau data pribadi penerima. Pada Cek Status, hanya NIK yang Anda ketik sendiri dan nama lengkap yang ditampilkan.
           </p>
         </div>
       </div>

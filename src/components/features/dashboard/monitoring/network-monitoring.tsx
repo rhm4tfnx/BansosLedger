@@ -196,7 +196,7 @@ export function NetworkMonitoring() {
                       [
                         'Operasional & signer',
                         'Monitoring administratif',
-                        'Verifikasi LPJ & program',
+                        'Verifikasi laporan realisasi & program',
                         'Audit independen via explorer',
                       ][i]
                     }
@@ -267,7 +267,7 @@ export function NetworkMonitoring() {
               <h3>Wallet otorisasi Kelurahan</h3>
               <p>
                 Signer aplikasi · Rancangan modifier onlyAuthorizedKelurahan pada
-                BansosLpjRegistry.sol.
+                BansosDisbursementRegistry.sol.
               </p>
               <code>{wallet}</code>
               <button

@@ -1,10 +1,13 @@
+import { formatPeriod } from '@/lib/utils'
+
 export const rupiah = (n: number) => 'Rp ' + n.toLocaleString('id-ID')
 export const percent = (n: number) => n.toLocaleString('id-ID', { maximumFractionDigits: 2 }) + '%'
 export const programs = ['PKH', 'BPNT', 'BLT', 'BST']
 export const recap = [
   {
     program: 'PKH',
-    period: 'Tahap I - Q1 2026',
+    periodId: 202601,
+    periodEnd: '2026-03-31',
     area: 'RT 001 / RW 001',
     recipients: 136,
     quota: 140,
@@ -13,7 +16,8 @@ export const recap = [
   },
   {
     program: 'PKH',
-    period: 'Tahap IV - Okt 2026',
+    periodId: 202610,
+    periodEnd: '2026-10-31',
     area: 'RT 002 / RW 001',
     recipients: 108,
     quota: 110,
@@ -22,7 +26,8 @@ export const recap = [
   },
   {
     program: 'BPNT',
-    period: 'Tahap II - Q2 2026',
+    periodId: 202604,
+    periodEnd: '2026-06-30',
     area: 'RT 001 / RW 002',
     recipients: 175,
     quota: 180,
@@ -31,7 +36,8 @@ export const recap = [
   },
   {
     program: 'BPNT',
-    period: 'Tahap IV - Okt 2026',
+    periodId: 202610,
+    periodEnd: '2026-10-31',
     area: 'RT 002 / RW 001',
     recipients: 115,
     quota: 120,
@@ -40,7 +46,8 @@ export const recap = [
   },
   {
     program: 'BLT',
-    period: 'Tahap III - Q3 2026',
+    periodId: 202607,
+    periodEnd: '2026-09-30',
     area: 'RT 003 / RW 002',
     recipients: 148,
     quota: 160,
@@ -49,14 +56,15 @@ export const recap = [
   },
   {
     program: 'BST',
-    period: 'Tahap IV - Okt 2026',
+    periodId: 202610,
+    periodEnd: '2026-10-31',
     area: 'RT 002 / RW 003',
     recipients: 130,
     quota: 140,
     budget: 140000000,
     realized: 128000000,
   },
-]
+].map(row => ({ ...row, period: formatPeriod(row.periodId) }))
 export type Recap = (typeof recap)[number]
 const names = [
   'St. Aminah Masse',

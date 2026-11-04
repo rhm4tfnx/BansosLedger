@@ -79,7 +79,7 @@ export function WalletPanels() {
             'Semua fitur',
             'Data draft & siklus hidup',
             'IPFS & smart contract',
-            'LPJ, registri & publik',
+            'Laporan realisasi, registri & publik',
           ].map((f) => (
             <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>
               {f}

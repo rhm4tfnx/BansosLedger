@@ -10,11 +10,11 @@ export function ProgramCharts({ programs }: { programs: Program[] }) {
   const data = programs.map((p) => ({
     name: p.type,
     used: quota ? p.used : (p.used * p.amount) / 1e6,
-    remaining: quota ? p.quota - p.used : ((p.quota - p.used) * p.amount) / 1e6,
+    remaining: quota ? p.quota - p.used : ((p.totalBudget - p.used * p.amount)) / 1e6,
   }))
   const distribution = Object.entries(
     programs.reduce<Record<string, number>>((a, p) => {
-      a[p.type] = (a[p.type] || 0) + p.amount * p.quota
+      a[p.type] = (a[p.type] || 0) + p.totalBudget
       return a
     }, {}),
   ).map(([name, value]) => ({ name, value }))
@@ -23,7 +23,7 @@ export function ProgramCharts({ programs }: { programs: Program[] }) {
       <section className={s.card}>
         <header>
           <div>
-            <h2>Progres Realisasi terhadap Anggaran & Kuota</h2>
+            <h2>Progres Realisasi terhadap Anggaran & Target penerima</h2>
             <p>Perbandingan realisasi dan sisa per program</p>
           </div>
           <select
@@ -32,12 +32,12 @@ export function ProgramCharts({ programs }: { programs: Program[] }) {
             onChange={(e) => setQuota(e.target.value === 'quota')}
           >
             <option value="funds">Dana (Juta Rp)</option>
-            <option value="quota">Kuota (KPM)</option>
+            <option value="quota">Target penerima (KPM)</option>
           </select>
         </header>
         <p>
           <span className={s.dot} /> Tersalurkan <span className={s.dotLight} /> Sisa{' '}
-          {quota ? 'kuota' : 'pagu'}
+          {quota ? 'target' : 'pagu'}
         </p>
         <ChartContainer
           className="h-64 w-full aspect-auto"
@@ -106,7 +106,7 @@ export function ProgramCharts({ programs }: { programs: Program[] }) {
               <strong>
                 {programs.filter((p) => p.form === f).length} Program (
                 {millions(
-                  programs.filter((p) => p.form === f).reduce((a, p) => a + p.amount * p.quota, 0),
+                  programs.filter((p) => p.form === f).reduce((a, p) => a + p.totalBudget, 0),
                 )}
                 )
               </strong>

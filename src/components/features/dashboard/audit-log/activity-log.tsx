@@ -119,7 +119,7 @@ export function ActivityLog() {
                 ['Logout', 'Autentikasi'],
                 ['Tambah / ubah program', 'CRUD & draft'],
                 ['Verifikasi LPJ / STS-NTPN', 'LPJ'],
-              ].map(([action, cat]) => (
+              ].filter(([, cat]) => process.env.NEXT_PUBLIC_ENABLE_LPJ_MODULE === 'true' || cat !== 'LPJ').map(([action, cat]) => (
                 <button
                   key={action}
                   disabled={role !== roles[0]}

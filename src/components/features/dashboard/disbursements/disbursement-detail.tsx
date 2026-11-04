@@ -1,12 +1,21 @@
 'use client'
 import { useState } from 'react'
+import { useRoleAccess } from '@/hooks/use-role-access'
+import { appendAudit } from '@/stores/audit-store'
+import { RecipientDialog } from '@/components/features/dashboard/recipients/recipient-dialog'
+import { formatPeriod } from '@/lib/utils'
+import { transactionSteps, statusIcon, failureReason } from '@/mocks/disbursement-data'
 import Link from 'next/link'
 import { recipients, short, useDisbursements, wita, type Distribution } from '@/mocks/disbursement-data'
-import { commitment, masked, money } from '@/mocks/recipient-data'
+import { demoHash, masked, money } from '@/mocks/recipient-data'
 import s from '@/components/features/dashboard/disbursements/disbursements.module.css'
 
 export function DisbursementDetail({ row, onSelect, onBack }: { row: Distribution; onSelect?: (id: string) => void; onBack?: () => void }) {
   const { data, operator, update } = useDisbursements()
+  const { can } = useRoleAccess()
+  const [withdraw, setWithdraw] = useState(false)
+  const [reason, setReason] = useState('')
+  const withdrawn = data.rows.find(item => item.id === row.id)?.evidenceWithdrawn ?? row.evidenceWithdrawn
   const [tampered, setTampered] = useState(false)
   const [verified, setVerified] = useState(false)
   const [preview, setPreview] = useState(false)
@@ -15,7 +24,7 @@ export function DisbursementDetail({ row, onSelect, onBack }: { row: Distributio
   const fields = [
     ['Data_ID', row.id, row.id],
     ['Hash penerima', r.identityHash ?? 'Tidak tersedia', r.identityHash ?? 'Tidak tersedia'],
-    ['Program & periode', `${row.program} · ${row.period}`, `${row.program} · ${row.period}`],
+    ['Program & periode', `${row.program} · ${formatPeriod(row.periodId)}`, `${row.program} · ${formatPeriod(row.periodId)}`],
     ['Nominal bantuan', money(tampered ? row.amount + 100000 : row.amount), money(row.amount)],
     ['CID bukti IPFS', row.cid, row.cid],
   ]
@@ -46,27 +55,22 @@ export function DisbursementDetail({ row, onSelect, onBack }: { row: Distributio
       <div className={`${s.card} ${s[row.status]}`}>
         <div className={s.row}>
           <div>
-            <span className={`${s.badge} ${s[row.status]}`}>{row.status}</span> <b>{row.id}</b>
+            <span className={`${s.badge} ${s[row.status]}`}>{statusIcon[row.status]} {row.status}</span> <b>{row.id}</b>
             <p>{wita(row.date)}</p>
           </div>
           <div>
             <b>{money(row.amount)}</b>
             <p>
-              {row.program} · {row.period}
+              {row.program} · {formatPeriod(row.periodId)}
             </p>
           </div>
         </div>
-        <p>{row.reason}</p>
+        <p aria-live="polite">{row.status === 'FAILED' ? failureReason(row.reason) : row.reason}</p>
       </div>
       <div className={s.card}>
-        <h2>Timeline status 3 fase · langkah 1–20</h2>
-        <div className={s.grid}>
-          {[
-            'Fase 1: MongoDB off-chain (L1–L7)',
-            'Fase 2: Pinata / IPFS (L8–L11)',
-            'Fase 3a: MetaMask & kontrak (L12–L16)',
-            'Fase 3b: Konsensus 4 validator QBFT (L17–L20)',
-          ].map((label, i) => (
+        <h2>Status transaksi · simulasi</h2>
+        <div className={s.grid} aria-live="polite">
+          {transactionSteps.map((label, i) => (
             <div className={s.phase} key={label}>
               <b>{label}</b>
               <p>
@@ -78,9 +82,9 @@ export function DisbursementDetail({ row, onSelect, onBack }: { row: Distributio
                       : 'Menunggu unggah'
                     : i === 2
                       ? row.hash ? 'Pre-flight & tanda tangan selesai · recordDisbursement()' : 'Menunggu tanda tangan / pengiriman'
-                      : row.status === 'SUCCESS'
-                        ? `Pre-prepare, Prepare, Commit · 4/4 validator · Blok #${row.block}`
-                        : row.reason}
+                      : i === 3
+                        ? row.block ? `Blok #${row.block} · simulasi` : '◷ Menunggu blok'
+                        : `${statusIcon[row.status]} ${row.status === 'FAILED' ? failureReason(row.reason) : row.status}`}
               </p>
               <small>{i < 2 || row.hash ? wita(row.date) : 'Belum dikonfirmasi'} · ilustrasi</small>
             </div>
@@ -93,7 +97,7 @@ export function DisbursementDetail({ row, onSelect, onBack }: { row: Distributio
           <code>TxHash: {row.hash ?? 'Belum terekam'}</code>
           <code>Nomor blok: {row.block ?? '—'}</code>
           <code>Timestamp: {row.hash ? wita(row.date) : '—'}</code>
-          <code>Previous block hash: {row.block ? commitment(`block-${row.block - 1}`) : '—'}</code>
+          <code>Previous block hash: {row.block ? demoHash(`block-${row.block - 1}`) : '—'}</code>
           <code>Wallet pengirim: {row.wallet}</code>
           <code>Hash penerima: {r.identityHash ?? 'Belum FINAL'}</code>
           <code>Penggunaan gas: {row.hash ? '118.420 (contoh)' : '—'}</code>
@@ -101,6 +105,8 @@ export function DisbursementDetail({ row, onSelect, onBack }: { row: Distributio
         </div>
         <div className={s.card}>
           <h2>Bukti penyaluran</h2>
+          <span className={s.badge}>{withdrawn ? 'DITARIK' : row.cid ? 'TERSEDIA' : 'MENUNGGU'}</span>
+          {can('evidence:upload') && row.status === 'SUCCESS' && !withdrawn && <button onClick={() => { setReason(''); setWithdraw(true) }}>Tarik bukti</button>}
           <p>{row.file}</p>
           <code>{row.cid || 'Belum ada CID'}</code>
           <div className={s.receipt}>
@@ -111,7 +117,7 @@ export function DisbursementDetail({ row, onSelect, onBack }: { row: Distributio
             <small>Bukan bukti pinning IPFS nyata. Sampel hanya untuk demonstrasi frontend.</small>
           </div>
           <div className={s.actions}>
-            {row.fileUrl ? (
+            {withdrawn ? <span>Bukti ditarik dari tampilan aplikasi.</span> : row.evidenceFiles?.length ? row.evidenceFiles.map(f => <a key={f.url} href={f.url} target="_blank" rel="noreferrer">Buka {f.name}</a>) : row.fileUrl ? (
               <a href={row.fileUrl} target="_blank" rel="noreferrer">
                 Buka berkas lokal
               </a>
@@ -129,7 +135,7 @@ export function DisbursementDetail({ row, onSelect, onBack }: { row: Distributio
               <h3>Dokumen sampel · {row.id}</h3>
               <p>
                 Penyerahan {row.program} kepada {r.name}, sejumlah {money(row.amount)} untuk{' '}
-                {row.period}.
+                {formatPeriod(row.periodId)}.
               </p>
               <p>Dokumen simulasi, tanpa tanda tangan sah.</p>
             </div>
@@ -207,6 +213,19 @@ export function DisbursementDetail({ row, onSelect, onBack }: { row: Distributio
           </div>
         )}
       </div>
+      {withdraw && can('evidence:upload') && row.status === 'SUCCESS' && <RecipientDialog title="Tarik bukti" subtitle={row.id} onClose={() => setWithdraw(false)}>
+        <form onSubmit={event => {
+          event.preventDefault()
+          if (!reason.trim() || withdrawn || !can('evidence:upload') || row.status !== 'SUCCESS') return
+          update(state => ({ ...state, rows: state.rows.map(item => item.id === row.id ? { ...item, evidenceWithdrawn: true, evidenceWithdrawalReason: reason.trim() } : item) }))
+          appendAudit({ action: 'Tarik bukti', category: 'IPFS', dataId: row.id, cid: row.cid, diff: { reason: reason.trim(), evidenceStatus: 'DITARIK' }, source: 'Detail penyaluran · simulasi' })
+          setWithdraw(false); setPreview(false); setMessage('Bukti ditarik dalam simulasi. CID tetap tersedia.')
+        }}>
+          <p className={s.banner}>Penarikan tidak menjamin salinan di node IPFS lain ikut hilang.</p>
+          <label>Alasan<textarea required maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} /></label>
+          <div className={s.actions}><button type="button" onClick={() => setWithdraw(false)}>Batal</button><button type="submit" className={s.primary} disabled={!reason.trim()}>Konfirmasi penarikan</button></div>
+        </form>
+      </RecipientDialog>}
       {message && (
         <p role="status" className={s.banner}>
           {message}

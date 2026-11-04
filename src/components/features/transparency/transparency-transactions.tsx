@@ -21,7 +21,7 @@ const batches = [
   },
   {
     time: '12:15:30',
-    program: 'PKH Tahap II',
+    program: 'PKH',
     amount: 75500000,
     count: 151,
     unit: 500000,
@@ -171,18 +171,18 @@ export function TransparencyTransactions() {
                 </p>
               </div>
               <div>
-                <h3 className="mb-3 font-semibold">Contoh penerima • 5 dari {batch.count}</h3>
+                <h3 className="mb-3 font-semibold">Contoh transaksi • 5 dari {batch.count}</h3>
                 <table className="w-full text-left text-sm">
                   <thead className="bg-secondary">
                     <tr>
-                      <th className="p-3">NIK disamarkan</th>
+                      <th className="p-3">Commitment penerima</th>
                       <th className="p-3">Nominal</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <tr key={n} className="border-b">
-                        <td className="p-3 font-mono text-xs">7371********000{n}</td>
+                    {['0x12ab…9f3c', '0x34cd…8e2b', '0x56ef…7d1a', '0x789a…6c0f', '0x90bc…5b8e'].map((hash) => (
+                      <tr key={hash} className="border-b">
+                        <td className="p-3 font-mono text-xs">{hash}</td>
                         <td className="p-3">{rupiah(batch.unit)}</td>
                       </tr>
                     ))}

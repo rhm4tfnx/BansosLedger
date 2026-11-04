@@ -1,4 +1,4 @@
-import { keccak256 } from 'js-sha3'
+import { keccak256, toUtf8Bytes } from 'ethers'
 
 export type Recipient = {
   id: string
@@ -11,7 +11,7 @@ export type Recipient = {
   income: number
   program: string
   dependents: number
-  status: 'DRAFT' | 'TERVERIFIKASI' | 'FINAL'
+  status: 'DRAFT' | 'FINAL'
   deleted: boolean
   received: number
   identityHash?: string
@@ -33,7 +33,8 @@ export const jobs = [
   'Buruh Tani / Perkebunan',
   'Pedagang Mikro / Warung',
 ]
-export const commitment = (nik: string) => '0x' + keccak256('BansosLedger:DEMO:' + nik)
+// DEMO ONLY - never derive a hash from a NIK in the browser
+export const demoHash = (recordId: string) => keccak256(toUtf8Bytes('demo-record:' + recordId))
 export const masked = (nik: string) => nik.slice(0, 4) + '********' + nik.slice(-4)
 export const money = (n: number) =>
   new Intl.NumberFormat('id-ID', {
@@ -67,10 +68,10 @@ export const initialRecipients: Recipient[] = names.map((name, i) => ({
   ],
   program: ['BLT', 'PKH', 'BPNT', 'BST', 'PKH', 'BLT', 'BPNT', 'BST', 'PKH', 'BLT', 'PKH'][i],
   dependents: [4, 5, 2, 3, 4, 3, 4, 2, 5, 3, 2][i],
-  status: i < 5 ? 'FINAL' : i < 7 ? 'TERVERIFIKASI' : 'DRAFT',
+  status: i < 7 ? 'FINAL' : 'DRAFT',
   deleted: i === 10,
   received: i === 0 ? 2 : i < 4 ? 1 : 0,
-  identityHash: i < 5 ? commitment(`000000000000${String(i + 1).padStart(4, '0')}`) : undefined,
+  identityHash: i < 7 ? demoHash(`demo-${i}`) : undefined,
   history: Array.from({ length: i === 0 ? 2 : i < 4 ? 1 : 0 }, (_, index) => ({
     date: `2026-${index === 0 ? '07' : '09'}-15`,
     program: ['BLT', 'PKH', 'BPNT', 'BST'][i % 4],

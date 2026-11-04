@@ -87,6 +87,7 @@ export function TransparencyDashboard() {
         data-transparency
         className="mx-auto flex max-w-7xl flex-col gap-12 px-5 py-10 sm:px-8 sm:py-12 [&>section[id]]:scroll-mt-44"
       >
+        <Link href="/program" className="text-sm text-primary underline">Lihat daftar program</Link>
         <section id="ringkasan" className="scroll-mt-24">
           <header>
             <p className="font-mono text-xs text-primary">
@@ -114,7 +115,7 @@ export function TransparencyDashboard() {
                 <h2 className="text-sm font-semibold">Informasi publik & privasi</h2>
                 <p className="mt-1 max-w-3xl text-xs leading-6 text-muted-foreground">
                   Data pada halaman ini merupakan ilustrasi dari referensi, belum terhubung ke
-                  blockchain. NIK penerima disamarkan untuk menjaga privasi.
+                  blockchain. Buku besar publik tidak memuat NIK, nama, alamat, atau telepon penerima.
                 </p>
               </div>
             </div>
@@ -202,7 +203,7 @@ export function TransparencyDashboard() {
             <article className={panel}>
               <h3 className="font-semibold">Tren penyaluran 7 hari terakhir</h3>
               <p className="mt-2 text-xs text-muted-foreground">
-                Jumlah transaksi per hari • data ilustrasi
+                Jumlah transaksi per hari ��� data ilustrasi
               </p>
               <ChartContainer
                 config={{ transactions: { label: 'Transaksi', color: 'var(--primary)' } }}
@@ -352,8 +353,7 @@ export function TransparencyDashboard() {
           </h2>
           <div className="mt-4 grid gap-4 text-xs leading-6 text-muted-foreground sm:grid-cols-2">
             <p>
-              <strong className="text-foreground">Identitas terlindungi.</strong> NIK ditampilkan
-              secara tersamar. Portal publik tidak menampilkan dokumen pribadi penerima.
+              <strong className="text-foreground">Identitas terlindungi.</strong> Buku besar publik tidak memuat NIK maupun nama penerima. Portal publik tidak menampilkan dokumen pribadi penerima.
             </p>
             <p>
               <strong className="text-foreground">Bukti dapat ditelusuri.</strong> Integrasi

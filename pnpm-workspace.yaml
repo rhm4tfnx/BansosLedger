@@ -1,5 +1,14 @@
+packages:
+  - 'packages/*'
+
 pmOnFail: ignore
 
 minimumReleaseAgeExclude:
   - '@next/*'
   - next
+
+allowBuilds:
+  esbuild: true
+  keccak: set this to true or false
+  mongodb-memory-server: set this to true or false
+  secp256k1: set this to true or false

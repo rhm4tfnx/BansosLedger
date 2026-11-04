@@ -1,6 +1,11 @@
 'use client'
 import { appendAudit } from '@/stores/audit-store'
 import { useState } from 'react'
+import useSWR from 'swr'
+import { formatPeriod, formatPeriodRange } from '@/lib/utils'
+import { programStatusLabel, type ProgramStatus } from '@/mocks/program-data'
+import { initialEnrollments, type Enrollment } from '@/mocks/enrollment-data'
+import { demoHash } from '@/mocks/recipient-data'
 import {
   Download,
   Plus,
@@ -12,7 +17,8 @@ import {
   Layers,
   CheckCircle2,
 } from 'lucide-react'
-import { keccak256 } from 'js-sha3'
+import { duplicationKey } from '@/lib/blockchain/duplication-key'
+import { initialRecipients } from '@/mocks/recipient-data'
 import { ProgramForm } from '@/components/features/dashboard/programs/program-form'
 import { ProgramCharts } from '@/components/features/dashboard/programs/program-charts'
 import { RecipientDialog } from '@/components/features/dashboard/recipients/recipient-dialog'
@@ -25,13 +31,12 @@ import {
   millions,
 } from '@/mocks/program-data'
 import s from '@/components/features/dashboard/programs/programs.module.css'
-export function Programs({
-  role = 'operator',
-}: {
-  role?: 'operator' | 'kecamatan' | 'dinas-sosial'
-}) {
-  const operator = role === 'operator'
-  const [programs, setPrograms] = useState(initialPrograms)
+import { useRoleAccess } from '@/hooks/use-role-access'
+export function Programs() {
+  const { can } = useRoleAccess()
+  const operator = can('program:create')
+  const { data: programs = initialPrograms, mutate: mutatePrograms } = useSWR<Program[]>('programs-demo', null, { fallbackData: initialPrograms })
+  const setPrograms = (update: (current: Program[]) => Program[]) => { void mutatePrograms(current => update(current ?? initialPrograms), { revalidate: false }) }
   const [types, setTypes] = useState(aidTypes)
   const [tab, setTab] = useState('Semua')
   const [query, setQuery] = useState('')
@@ -40,14 +45,21 @@ export function Programs({
   const [selectedId, setSelectedId] = useState(initialPrograms[0].id)
   const [editing, setEditing] = useState<Program | null | undefined>(undefined)
   const [master, setMaster] = useState(false)
-  const [pending, setPending] = useState<{ id: string; action: string } | null>(null)
+  const [pending, setPending] = useState<{ id: string; action: string; second?: boolean } | null>(null)
+  const { data: enrollments = initialEnrollments, mutate: setEnrollments } = useSWR<Enrollment[]>('program-enrollments-demo', null, { fallbackData: initialEnrollments })
+  const [enrollmentDialog, setEnrollmentDialog] = useState<{ id: string; register: boolean } | null>(null)
+  const [chosen, setChosen] = useState<string[]>([])
+  const enrollmentProgram = programs.find(p => p.id === enrollmentDialog?.id)
+  const eligible = initialRecipients.filter(r => r.status === 'FINAL' && !r.deleted && (enrollmentDialog?.register
+    ? enrollments.some(e => e.programCode === enrollmentProgram?.code && e.recipientId === r.id && e.status === 'ENROLLED')
+    : !enrollments.some(e => e.programCode === enrollmentProgram?.code && e.recipientId === r.id)))
   const [notice, setNotice] = useState('')
   const [result, setResult] = useState('')
   const [keys, setKeys] = useState<string[]>([])
   const [nik, setNik] = useState('0000000000000001')
   const active = programs.filter((p) => !p.deleted)
   const selected = programs.find((p) => p.id === selectedId)!
-  const budget = active.reduce((n, p) => n + p.amount * p.quota, 0)
+  const budget = active.reduce((n, p) => n + p.totalBudget, 0)
   const spent = active.reduce((n, p) => n + p.amount * p.used, 0)
   const quota = active.reduce((n, p) => n + p.quota, 0)
   const used = active.reduce((n, p) => n + p.used, 0)
@@ -57,7 +69,7 @@ export function Programs({
       (tab === 'Soft-Deleted' ? p.deleted : !p.deleted && (tab === 'Semua' || p.status === tab)) &&
       (!type || p.type === type) &&
       (!form || p.form === form) &&
-      `${p.name} ${p.id} ${p.criteria}`.toLowerCase().includes(query.toLowerCase()),
+      `${p.name} ${p.code} ${p.id} ${p.criteria}`.toLowerCase().includes(query.toLowerCase()),
   )
   function exportCsv() {
     const cell = (v: string | number) =>
@@ -74,29 +86,29 @@ export function Programs({
         'Bentuk',
         'Periode',
         'Nominal',
-        'Kuota',
+        'Target penerima',
         'Pagu',
         'Terpakai',
         'Tersalurkan',
-        'Sisa Kuota',
+        'Sisa target',
         'Sisa Dana',
         'Status',
         'Kriteria',
       ],
       ...rows.map((p) => [
-        p.id,
+        p.code,
         p.name,
         p.type,
         p.form,
-        p.period,
+        formatPeriodRange(p.startPeriod, p.endPeriod),
         p.amount,
         p.quota,
-        p.amount * p.quota,
+        p.totalBudget,
         p.used,
         p.used * p.amount,
         p.quota - p.used,
-        (p.quota - p.used) * p.amount,
-        p.deleted ? 'Soft-Deleted' : p.status,
+        (p.totalBudget - p.used * p.amount),
+        p.deleted ? 'Soft-Deleted' : programStatusLabel[p.status],
         p.criteria,
       ]),
     ]
@@ -111,14 +123,20 @@ export function Programs({
     setNotice('Rekap sesuai filter berhasil diekspor.')
   }
   function confirm() {
-    if (!pending || !operator) return
+    if (!pending || !can(pending.action === 'Soft Delete' ? 'program:soft-delete' : 'program:update')) return
+    const current = programs.find(p => p.id === pending.id)
+    if (!current) return
+    if (pending.action === 'Tutup program') {
+      if (current.status !== 'ACTIVE' || current.deleted) return
+      if (!pending.second) { setPending({ ...pending, second: true }); return }
+    } else if (current.status !== 'DRAFT') return
     setPrograms((prev) =>
       prev.map((p) => {
         if (p.id !== pending.id) return p
-        if (pending.action === 'Aktifkan' && p.status === 'DRAFT' && !p.deleted)
-          return { ...p, status: 'AKTIF' }
-        if (pending.action === 'Selesaikan' && p.status === 'AKTIF' && !p.deleted)
-          return { ...p, status: 'SELESAI' }
+        if (pending.action === 'Aktivasi (createProgram)' && p.status === 'DRAFT' && !p.deleted)
+          return { ...p, status: 'ACTIVE', activationTx: demoHash(`activation:${p.code}:${crypto.randomUUID()}`) }
+        if (pending.action === 'Tutup program' && p.status === 'ACTIVE' && !p.deleted)
+          return { ...p, status: 'CLOSED' }
         if (pending.action === 'Soft Delete' && p.status === 'DRAFT') return { ...p, deleted: true }
         if (pending.action === 'Pulihkan' && p.deleted && p.status === 'DRAFT')
           return { ...p, deleted: false }
@@ -136,14 +154,30 @@ export function Programs({
     setPending(null)
     setResult('')
   }
+  async function saveEnrollment() {
+    if (!can('program:update') || !enrollmentDialog || !enrollmentProgram || enrollmentProgram.deleted || enrollmentProgram.status === 'CLOSED') return
+    const register = enrollmentDialog.register
+    if (register && enrollmentProgram.status !== 'ACTIVE') return
+    const ids = [...new Set(chosen)].filter(id => eligible.some(r => r.id === id))
+    if (!ids.length || (register && ids.length > 100)) { setNotice('Pilih penerima yang valid. Maks. 100 penerima per transaksi'); return }
+    await setEnrollments(current => {
+      const existing = current ?? initialEnrollments
+      if (register) return existing.map(e => e.programCode === enrollmentProgram.code && ids.includes(e.recipientId) && e.status === 'ENROLLED' ? { ...e, status: 'REGISTERED_ONCHAIN' as const } : e)
+      return [...existing, ...ids.filter(id => !existing.some(e => e.programCode === enrollmentProgram.code && e.recipientId === id)).map(recipientId => ({ programCode: enrollmentProgram.code, recipientId, status: 'ENROLLED' as const }))]
+    }, { revalidate: false })
+    appendAudit({ action: register ? 'Registrasi on-chain penerima (simulasi)' : 'Daftarkan penerima program', category: 'CRUD & draft', dataId: enrollmentProgram.id, diff: { programCode: enrollmentProgram.code, recipientIds: ids, status: register ? 'REGISTERED_ONCHAIN' : 'ENROLLED' }, source: 'Halaman program · simulasi' })
+    setNotice(`${ids.length} penerima ${register ? 'diregistrasi on-chain' : 'didaftarkan'} dalam simulasi. Bukan transaksi blockchain.`)
+    setChosen([]); setEnrollmentDialog(null)
+  }
   function simulate(manipulate = false) {
     if (!operator) return
-    if (selected.deleted || selected.status !== 'AKTIF') {
+    if (selected.deleted || selected.status !== 'ACTIVE') {
       setResult('Ditolak: program harus aktif dan tidak dihapus.')
       return
     }
+    if ((selected.used + 1) * selected.amount > selected.totalBudget) { setResult('Ditolak: sisa pagu tidak mencukupi.'); return }
     if (selected.used >= selected.quota) {
-      setResult('Ditolak: kuota program telah habis.')
+      setResult('Ditolak: target program telah habis.')
       return
     }
     if (!/^\d{16}$/.test(nik)) {
@@ -154,7 +188,9 @@ export function Programs({
       setResult('Ditolak: nominal tidak sesuai acuan program. Tidak ada perubahan realisasi.')
       return
     }
-    const key = keccak256(JSON.stringify([keccak256(nik), selected.id, selected.period]))
+    const recipient = initialRecipients.find(r => r.nik === nik && r.status === 'FINAL' && !r.deleted)
+    if (!recipient?.identityHash) { setResult('Ditolak: penerima demo FINAL tidak ditemukan.'); return }
+    const key = duplicationKey(selected.programId, selected.startPeriod, recipient.identityHash as `0x${string}`).slice(2)
     if (keys.includes(key)) {
       setResult('Ditolak: duplikasi NIK + program + periode terdeteksi.')
       return
@@ -171,7 +207,7 @@ export function Programs({
         <div>
           <small>Dashboard Internal / Program Bantuan Sosial</small>
           <h1>Manajemen Program Bantuan Sosial</h1>
-          <p>Kelola program, acuan penyaluran, serta pantau realisasi kuota dan pagu anggaran.</p>
+          <p>Kelola program, acuan penyaluran, serta pantau realisasi target dan pagu anggaran.</p>
         </div>
         <div className={s.actions}>
           <button onClick={exportCsv}>
@@ -206,7 +242,7 @@ export function Programs({
           {
             label: 'Total Program Bantuan',
             value: `${active.length} Program`,
-            note: `${count('AKTIF')} Aktif · ${count('DRAFT')} Draft`,
+            note: `${count('ACTIVE')} Aktif · ${count('DRAFT')} Draft`,
             Icon: Layers,
           },
           {
@@ -222,9 +258,9 @@ export function Programs({
             Icon: CheckCircle2,
           },
           {
-            label: 'Progres Kuota Penerima',
+            label: 'Progres target penerima',
             value: `${used.toLocaleString('id-ID')} / ${quota.toLocaleString('id-ID')}`,
-            note: `KPM · Sisa ${quota - used} penerima`,
+            note: `KPM · ${quota ? ((used / quota) * 100).toFixed(1) : 0}% · Sisa ${quota - used} penerima`,
             Icon: Users,
           },
         ].map(({ label, value, note, Icon }) => (
@@ -254,7 +290,7 @@ export function Programs({
             {[
               {
                 label: 'Program AKTIF',
-                value: count('AKTIF'),
+                value: count('ACTIVE'),
                 note: 'Nominal & periode dikunci di wizard',
               },
               {
@@ -264,7 +300,7 @@ export function Programs({
               },
               {
                 label: 'Program SELESAI (Final)',
-                value: count('SELESAI'),
+                value: count('CLOSED'),
                 note: 'Permanen · parameter inti terkunci',
               },
               {
@@ -313,9 +349,9 @@ export function Programs({
                 note: `${budget ? (((budget - spent) / budget) * 100).toFixed(1) : 0}% dari total pagu`,
               },
               {
-                label: 'Sisa Kuota Penerima',
+                label: 'Sisa target Penerima',
                 value: `${quota - used} KPM`,
-                note: 'Kuota yang belum disalurkan',
+                note: 'Target penerima yang belum terealisasi',
               },
             ].map((item) => (
               <div className={s.inset} key={item.label}>
@@ -337,9 +373,9 @@ export function Programs({
             </div>
           </header>
           <div className={s.tabs}>
-            {['Semua', 'AKTIF', 'DRAFT', 'SELESAI', 'Soft-Deleted'].map((t) => (
+            {['Semua', 'ACTIVE', 'DRAFT', 'CLOSED', 'Soft-Deleted'].map((t) => (
               <button aria-pressed={tab === t} onClick={() => setTab(t)} key={t}>
-                {t} (
+                {programStatusLabel[t as ProgramStatus] ?? t} (
                 {t === 'Semua'
                   ? active.length
                   : t === 'Soft-Deleted'
@@ -404,7 +440,7 @@ export function Programs({
                           setResult('')
                         }}
                       >
-                        <small>#{p.id}</small>
+                        <small>{p.code} · #{p.id}</small>
                         <strong>{p.name}</strong>
                       </button>
                       <p className={s.criteria} title={p.criteria}>
@@ -415,7 +451,7 @@ export function Programs({
                       <span className={s.badge}>{p.type}</span>
                       <p>{p.form}</p>
                     </td>
-                    <td>{p.period}</td>
+                    <td>{formatPeriodRange(p.startPeriod, p.endPeriod)}</td>
                     <td>
                       <strong>{rupiah(p.amount)}</strong>
                       <small className={s.lock}>
@@ -431,16 +467,16 @@ export function Programs({
                       <p>
                         Tersalurkan: {millions(p.used * p.amount)}
                         <br />
-                        Pagu: {millions(p.quota * p.amount)}
+                        Pagu: {millions(p.totalBudget)}
                         <br />
-                        Sisa: {millions((p.quota - p.used) * p.amount)}
+                        Sisa: {millions((p.totalBudget - p.used * p.amount))}
                       </p>
                     </td>
                     <td>
                       <span
-                        className={`${s.badge} ${p.status === 'AKTIF' ? s.green : p.status === 'DRAFT' ? s.amber : ''}`}
+                        className={`${s.badge} ${p.status === 'ACTIVE' ? s.green : p.status === 'DRAFT' ? s.amber : ''}`}
                       >
-                        {p.deleted ? 'DIHAPUS' : p.status}
+                        {p.deleted ? 'DIHAPUS' : programStatusLabel[p.status]}
                       </span>
                     </td>
                     <td>
@@ -451,32 +487,35 @@ export function Programs({
                             setResult('')
                           }}
                         >
-                          {p.status === 'AKTIF' ? 'Uji Validasi' : 'Detail'}
+                          {p.status === 'ACTIVE' ? 'Uji Validasi' : 'Detail'}
                         </button>
-                        {operator &&
+                        {can('program:update') &&
                           (p.deleted ? (
                             <button onClick={() => setPending({ id: p.id, action: 'Pulihkan' })}>
                               Pulihkan
                             </button>
                           ) : p.status === 'DRAFT' ? (
                             <>
-                              <button onClick={() => setPending({ id: p.id, action: 'Aktifkan' })}>
-                                Aktifkan
+                              <button onClick={() => setPending({ id: p.id, action: 'Aktivasi (createProgram)' })}>
+                                Aktivasi (createProgram)
                               </button>
-                              <button onClick={() => setEditing(p)}>Edit</button>
+                              <button disabled={!can('program:update')} onClick={() => setEditing(p)}>Edit</button>
                               <button
                                 className={s.danger}
+                                disabled={!can('program:soft-delete')}
                                 onClick={() => setPending({ id: p.id, action: 'Soft Delete' })}
                               >
                                 Hapus
                               </button>
                             </>
-                          ) : p.status === 'AKTIF' ? (
-                            <button onClick={() => setPending({ id: p.id, action: 'Selesaikan' })}>
-                              Selesaikan
-                            </button>
+                          ) : p.status === 'ACTIVE' ? (
+                            <><button onClick={() => setEditing(p)}>Edit</button><button onClick={() => setPending({ id: p.id, action: 'Tutup program' })}>Tutup program</button></>
                           ) : null)}
-                        {p.status === 'SELESAI' && (
+                        {can('program:update') && !p.deleted && p.status !== 'CLOSED' && <>
+                          <button onClick={() => { setChosen([]); setEnrollmentDialog({ id: p.id, register: false }) }}>Daftarkan penerima</button>
+                          <button disabled={p.status !== 'ACTIVE'} onClick={() => { setChosen([]); setEnrollmentDialog({ id: p.id, register: true }) }}>Registrasi on-chain</button>
+                        </>}
+                        {p.status === 'CLOSED' && (
                           <small>
                             <LockKeyhole size={11} /> Final · Terkunci
                           </small>
@@ -499,16 +538,19 @@ export function Programs({
               <small className={s.accent}>UJI SKENARIO VALIDASI</small>
               <h2>{selected.name}</h2>
               <p>
-                #{selected.id} · {selected.period}
+                #{selected.id} · {formatPeriodRange(selected.startPeriod, selected.endPeriod)}
               </p>
             </div>
-            <span className={s.badge}>{selected.deleted ? 'DIHAPUS' : selected.status}</span>
+            <span className={s.badge}>{selected.deleted ? 'DIHAPUS' : programStatusLabel[selected.status]}</span>
           </header>
           <p>
             <strong>Kriteria:</strong> {selected.criteria}
           </p>
+          {selected.activationTx && <p className={s.criteria} title={selected.activationTx}>Transaksi aktivasi (demo): {selected.activationTx}</p>}
+          <p>Sumber dana: {selected.fundSource} · Kode: {selected.code}</p>
           <div className={s.inset}>
             <h3>Simulasi Input Wizard Penyaluran</h3>
+            <small>Periode uji: {formatPeriod(selected.startPeriod)}</small>
             <label>
               Nominal / Nilai Bantuan per KPM
               <input
@@ -519,7 +561,7 @@ export function Programs({
             </label>
             <small>
               <LockKeyhole size={12} /> Terkunci otomatis · {selected.form} (
-              {selected.unit || 'Tanpa keterangan'}) · Sisa kuota {selected.quota - selected.used}{' '}
+              {selected.unit || 'Tanpa keterangan'}) · Sisa target {selected.quota - selected.used}{' '}
               KPM
             </small>
             {operator && (
@@ -548,8 +590,8 @@ export function Programs({
           </div>
           <ol className={s.steps}>
             <li>
-              <strong>Validasi Status & Kuota Program</strong>
-              <p>Program harus AKTIF, tidak dihapus, dan memiliki sisa kuota.</p>
+              <strong>Validasi Status & Target penerima Program</strong>
+              <p>Program harus AKTIF, tidak dihapus, dan memiliki sisa target.</p>
             </li>
             <li>
               <strong>Acuan Nominal & Periode Otomatis</strong>
@@ -573,28 +615,45 @@ export function Programs({
       {editing !== undefined && operator && (
         <ProgramForm
           initial={editing || undefined}
+          programs={programs}
           types={types}
           onClose={() => setEditing(undefined)}
           onSave={(p) => {
+            if (!can(editing ? 'program:update' : 'program:create')) return
+            const previous = programs.find(item => item.id === p.id)
+            if (previous?.deleted || previous?.status === 'CLOSED') return
+            if (programs.some(item => item.id !== p.id && item.code === p.code)) { setNotice('Kode program sudah digunakan.'); return }
+            if (previous?.status === 'ACTIVE' && (p.code !== previous.code || p.amount !== previous.amount || p.startPeriod !== previous.startPeriod || p.endPeriod !== previous.endPeriod)) return
             setPrograms((prev) =>
               editing
                 ? prev.map((old) =>
-                    old.id === p.id && old.status === 'DRAFT' && !old.deleted ? p : old,
+                    old.id === p.id && old.status !== 'CLOSED' && !old.deleted ? p : old,
                   )
                 : [...prev, p],
             )
+            if (previous && previous.code !== p.code) void setEnrollments(current => (current ?? initialEnrollments).map(e => e.programCode === previous.code ? { ...e, programCode: p.code } : e), { revalidate: false })
             setEditing(undefined)
             appendAudit({
-              action: editing ? 'Ubah draft program' : 'Tambah program',
+              action: editing ? 'Ubah program' : 'Tambah program',
               category: 'CRUD & draft',
               dataId: p.id,
               diff: { before: editing ?? null, after: p },
               source: 'Halaman program · simulasi',
             })
-            setNotice('Program berhasil disimpan sebagai DRAFT.')
+            setNotice(`Program berhasil disimpan sebagai ${programStatusLabel[p.status]}.`)
           }}
         />
       )}
+      {enrollmentDialog && enrollmentProgram && can('program:update') && <RecipientDialog
+        title={enrollmentDialog.register ? 'Registrasi on-chain' : 'Daftarkan penerima'} subtitle={enrollmentProgram.name}
+        onClose={() => { setEnrollmentDialog(null); setChosen([]) }}>
+        <p>{enrollmentDialog.register ? 'Maks. 100 penerima per transaksi' : 'Pilih penerima FINAL yang belum terdaftar pada program ini.'}</p>
+        <p role="status">{chosen.length} penerima dipilih · Simulasi frontend</p>
+        <div className={s.tableWrap}><table><thead><tr><th>Pilih</th><th>Penerima</th><th>Status</th></tr></thead><tbody>
+          {eligible.map(r => <tr key={r.id}><td><input type="checkbox" aria-label={`Pilih ${r.name}`} checked={chosen.includes(r.id)} disabled={enrollmentDialog.register && chosen.length >= 100 && !chosen.includes(r.id)} onChange={e => setChosen(current => e.target.checked ? [...new Set([...current, r.id])] : current.filter(id => id !== r.id))} /></td><td>{r.name}</td><td>{enrollmentDialog.register ? 'ENROLLED' : 'FINAL'}</td></tr>)}
+        </tbody></table>{!eligible.length && <p className={s.empty}>Tidak ada penerima yang memenuhi syarat.</p>}</div>
+        <div className={s.actions}><button onClick={() => setEnrollmentDialog(null)}>Batal</button><button className={s.primary} disabled={!chosen.length || (enrollmentDialog.register && chosen.length > 100)} onClick={saveEnrollment}>{enrollmentDialog.register ? 'Registrasi on-chain' : 'Daftarkan penerima'}</button></div>
+      </RecipientDialog>}
       {master && operator && (
         <TypeDialog
           types={types}
@@ -604,14 +663,14 @@ export function Programs({
       )}
       {pending && (
         <RecipientDialog
-          title={`${pending.action} Program`}
+          title={pending.second ? 'Konfirmasi akhir: tutup program' : `${pending.action} Program`}
           subtitle={programs.find((p) => p.id === pending.id)?.name}
           onClose={() => setPending(null)}
         >
           <p>
-            {pending.action === 'Aktifkan'
-              ? 'Nominal, periode, kuota, dan kriteria akan terkunci. Program tidak dapat diedit atau dihapus setelah aktif.'
-              : pending.action === 'Selesaikan'
+            {pending.action === 'Aktivasi (createProgram)'
+              ? 'Kode, nominal, dan periode akan terkunci. Aktivasi membuat hash transaksi demo, bukan transaksi blockchain.'
+              : pending.action === 'Tutup program'
                 ? 'Program akan ditutup dan tidak dapat menerima penyaluran lagi. Sisa pagu tetap dicatat.'
                 : pending.action === 'Soft Delete'
                   ? 'Data DRAFT akan dipindahkan ke arsip dan dapat dipulihkan.'
@@ -620,7 +679,7 @@ export function Programs({
           <div className={s.actions}>
             <button onClick={() => setPending(null)}>Batal</button>
             <button className={s.primary} onClick={confirm}>
-              Konfirmasi {pending.action}
+              {pending.second ? 'Ya, tutup program secara permanen' : `Konfirmasi ${pending.action}`}
             </button>
           </div>
         </RecipientDialog>

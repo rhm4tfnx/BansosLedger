@@ -5,9 +5,11 @@ import { Users, Layers, ArrowLeftRight, Search, ArrowUpRight, Plus, RotateCw, Do
 import { DistributionCharts } from './distribution-charts'
 import { rejectedTransactions } from '@/constants/dashboard'
 import { useDashboardSearch } from '../dashboard-shell'
+import { useRoleAccess } from '@/hooks/use-role-access'
 import styles from './dashboard.module.css'
 
 export function Dashboard() {
+  const { can, meta } = useRoleAccess()
   const { query, setQuery } = useDashboardSearch()
   const [filter, setFilter] = useState('Semua')
   const [notice, setNotice] = useState('')
@@ -45,7 +47,7 @@ export function Dashboard() {
                 <div>
                   <span className={styles.softBadge}>
                     <ShieldCheck size={14} />
-                    OPERATOR_ROLE
+                    {meta?.shortLabel ?? 'Belum Login'}
                   </span>
                   <span className={styles.period}>Tahun anggaran 2026</span>
                 </div>
@@ -55,6 +57,7 @@ export function Dashboard() {
                     Unduh laporan
                   </button>
                   <button
+                    disabled={!can('transaction:sign')}
                     onClick={() =>
                       setNotice(
                         'Pratinjau retry: 310 transaksi pending akan ditinjau sebelum dikirim ulang. Tidak ada transaksi yang dikirim.',
@@ -66,6 +69,7 @@ export function Dashboard() {
                   </button>
                   <button
                     className={styles.primaryButton}
+                    disabled={!can('disbursement:create')}
                     onClick={() =>
                       setNotice(
                         'Penyaluran batch belum tersedia dalam pratinjau. Integrasi wallet dan persetujuan operator diperlukan sebelum mengirim bantuan.',

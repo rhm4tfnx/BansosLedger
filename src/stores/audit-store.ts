@@ -25,7 +25,7 @@ export const categories = [
   'CRUD & draft',
   'IPFS',
   'Transaksi',
-  'LPJ',
+  ...(process.env.NEXT_PUBLIC_ENABLE_LPJ_MODULE === 'true' ? ['LPJ'] : []),
   'Keamanan',
   'Rekonsiliasi',
 ]
@@ -54,7 +54,8 @@ export function appendAudit(input: Partial<AuditEntry> & Pick<AuditEntry, 'actio
   void mutate<AuditEntry[]>(key, (current = []) => [entry, ...current], { revalidate: false })
 }
 export function useAudit() {
-  return useSWR<AuditEntry[]>(key, null, { fallbackData: [] }).data ?? []
+  const entries = useSWR<AuditEntry[]>(key, null, { fallbackData: [] }).data ?? []
+  return process.env.NEXT_PUBLIC_ENABLE_LPJ_MODULE === 'true' ? entries : entries.filter(entry => entry.category !== 'LPJ')
 }
 export const wita = (time: string) =>
   new Date(time).toLocaleString('id-ID', { timeZone: 'Asia/Makassar' }) + ' WITA'

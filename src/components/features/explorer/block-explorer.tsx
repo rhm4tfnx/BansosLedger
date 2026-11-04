@@ -10,31 +10,15 @@ import { CountUp } from '@/components/ui/count-up'
 import { wallets, addresses } from '@/constants/explorer-addresses'
 import { walletFor } from '@/mocks/explorer-queries'
 
-const validators = [
-  'Kelurahan Takkalasi',
-  'Kecamatan Balusu',
-  'Dinas Sosial Barru',
-  'Auditor Pengawas',
-]
-const blocks = Array.from({ length: 12 }, (_, i) => ({
-  id: 12542 - i,
-  signer: validators[i % 4],
-  transactions: [24, 18, 32, 12, 21, 16][i % 6],
-  gas: 2450000 - i * 12000,
-}))
-const transactions = blocks.map((b, i) => ({
-  ...b,
-  hash: `0x${(735123 + i).toString(16).padStart(64, '0')}`,
-  address: `0x${(82410 + (i % 4)).toString(16).padStart(40, '0')}`,
-  method: ['recordBatch', 'verifyDistribution', 'registerRecipient', 'auditBatch'][i % 4],
-  program: ['Sembako / BPNT', 'Bantuan Tunai', 'Pencatatan penerima', 'Audit penyaluran'][i % 4],
-}))
+import { validators, blocks, transactions as mockTransactions } from '@/mocks/explorer-data'
 const trend = [126, 141, 158, 163, 172, 168, 154, 139, 132, 145, 157, 169, 185, 195].map(
   (value, i) => ({ day: `${i + 1} Okt`, value }),
 )
 const short = (value: string) => `${value.slice(0, 10)}…${value.slice(-6)}`
 
-export function BlockExplorer() {
+export function BlockExplorer({ ledger = [] }: { ledger?: typeof mockTransactions }) {
+  const transactions = [...ledger, ...mockTransactions]
+  const [searchError, setSearchError] = useState('')
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState<{ query: string; filter: string } | null>(null)
@@ -52,7 +36,7 @@ export function BlockExplorer() {
       : []
   const matchedTransactions =
     search && ['all', 'transaction', 'address'].includes(search.filter)
-      ? transactions.filter((t) => t.hash.toLowerCase() === q || t.address.toLowerCase() === q)
+      ? transactions.filter((t) => t.hash.toLowerCase() === q || t.address.toLowerCase() === q || t.refId.toLowerCase() === q || t.commitment.toLowerCase() === q)
       : []
   const matchedValidators =
     search && ['all', 'validator'].includes(search.filter)
@@ -107,7 +91,11 @@ export function BlockExplorer() {
             <form
               onSubmit={(e) => {
                 e.preventDefault()
-                if (query.trim()) {
+                const value = query.trim()
+                const valid = /^0x[0-9a-f]{64}$/i.test(value) || /^0x[0-9a-f]{40}$/i.test(value) || /^\d+$/.test(value) || /^(?:REF|TX|DIS|PEN)-[A-Z0-9-]+$/i.test(value) || transactions.some(t => t.refId.toLowerCase() === value.toLowerCase())
+                if (!valid) { setSearch(null); setSearchError('Format pencarian tidak valid. Gunakan TxHash, nomor blok, alamat, refId, atau commitment.'); return }
+                setSearchError('')
+                if (value) {
                   const wallet = addresses.find(
                     (w) => w.address.toLowerCase() === query.trim().toLowerCase(),
                   )
@@ -132,19 +120,18 @@ export function BlockExplorer() {
               >
                 <option value="all">Semua filter</option>
                 <option value="block">Nomor blok</option>
-                <option value="transaction">Tx hash</option>
+                <option value="transaction">TxHash / refId / commitment</option>
                 <option value="address">Alamat</option>
-                <option value="validator">Validator</option>
               </select>
               <label htmlFor="explorer-search" className="sr-only">
-                Cari blok, hash transaksi, alamat, atau validator
+                Cari TxHash, nomor blok, alamat, refId, atau commitment
               </label>
               <input
                 id="explorer-search"
                 required
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Cari alamat / Tx hash / nomor blok / validator"
+                placeholder="TxHash / nomor blok / alamat / refId / commitment"
                 className="min-w-0 flex-1 bg-white px-2 text-xs outline-none focus:ring-2 focus:ring-primary"
               />
               <button
@@ -155,6 +142,8 @@ export function BlockExplorer() {
                 <Search size={20} />
               </button>
             </form>
+            {searchError && <p role="alert" className="mt-3 text-xs text-destructive">{searchError}</p>}
+            <nav className="mt-3 flex flex-wrap gap-4 text-xs text-primary"><Link href="/cara-verifikasi">Cara memeriksa transaksi</Link><Link href="/explorer/contract">Kontrak</Link><Link href="/explorer/validator">Validator</Link><Link href="/transparansi">Ringkasan publik</Link></nav>
             <p className="mt-3 text-xs text-muted-foreground">
               Coba:{' '}
               <button
@@ -166,7 +155,7 @@ export function BlockExplorer() {
               >
                 12542
               </button>{' '}
-              atau nama institusi validator.
+              atau salin TxHash dari transaksi di bawah.
             </p>
           </div>
         </section>
@@ -227,7 +216,7 @@ export function BlockExplorer() {
                   !matchedValidators.length && (
                     <p className="text-sm">
                       Tidak ditemukan dalam dataset ilustrasi. Gunakan nomor blok 12531–12542 atau
-                      nama validator.
+                      TxHash, refId, atau commitment dari data ilustrasi.
                     </p>
                   )}
               </div>
@@ -383,7 +372,7 @@ export function BlockExplorer() {
                 <h2 className="font-semibold">Transaksi terbaru</h2>
                 <span className="font-mono text-[10px] text-muted-foreground">LATEST TXNS</span>
               </div>
-              {transactions.slice(0, allTransactions ? 12 : 6).map((t) => (
+              {transactions.slice(0, allTransactions ? transactions.length : 6).map((t) => (
                 <div className="flex items-center gap-3 border-b p-5" key={t.hash}>
                   <span className="rounded-control bg-secondary p-3 text-primary">
                     <FileText size={18} />
@@ -407,7 +396,7 @@ export function BlockExplorer() {
                   </div>
                   <div className="min-w-0 text-right">
                     <Link
-                      href={`/explorer/address/${t.address}`}
+                      href={`/explorer/address/${walletFor(t.signer).address}`}
                       className="text-xs text-primary hover:underline"
                     >
                       {t.signer}
@@ -420,7 +409,7 @@ export function BlockExplorer() {
                 onClick={() => setAllTransactions(!allTransactions)}
                 className="w-full bg-secondary/40 p-4 font-mono text-xs text-primary"
               >
-                {allTransactions ? 'Tampilkan lebih sedikit' : 'Lihat semua transaksi (12)'} →
+                {allTransactions ? 'Tampilkan lebih sedikit' : `Lihat semua transaksi (${transactions.length})`} →
               </button>
             </section>
           </div>

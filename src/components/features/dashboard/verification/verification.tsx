@@ -1,5 +1,6 @@
 'use client'
 import { useRef, useState } from 'react'
+import { formatPeriod } from '@/lib/utils'
 import {
   Search,
   ShieldCheck,
@@ -188,7 +189,7 @@ export function Verification() {
             </div>
             <p className={s.formula}>
               Target komitmen:{' '}
-              <code>keccak256(abi.encodePacked(nik, namaLengkap, kodeWilayah))</code>
+              <code>{'recipientHash = HMAC-SHA256(kunci server, "bansos:recipient:v1|" + nik); duplicationKey = keccak256(abi.encode(recipientHash, programId, periodId))'}</code><p>Kunci rahasia hanya disimpan server. Nama, wilayah, nominal, dan CID tidak dimasukkan dalam hash.</p>
             </p>
             <small>Hash pada simulator merupakan label uji, bukan hasil kalkulasi keccak256.</small>
           </section>
@@ -263,7 +264,7 @@ export function Verification() {
                       </td>
                       <td>
                         <span className={s.badge}>{r.program}</span>
-                        <p>Tahap I / Triwulan I 2026</p>
+                        <p>{formatPeriod(202601)}</p>
                         <code>
                           Off-chain:{' '}
                           {r.issue === 'hilang'
@@ -405,7 +406,7 @@ export function Verification() {
                       money(selected.issue === 'nominal' ? 450000 : selected.amount),
                       money(selected.amount),
                     ],
-                    ['Periode', 'Tahap I / Triwulan I 2026', 'Tahap I / Triwulan I 2026'],
+                    ['Periode', formatPeriod(202601), formatPeriod(202601)],
                     ['Wallet signer', 'SIGNER-CONTOH', 'SIGNER-CONTOH'],
                     ['CID', selected.issue === 'cid' ? 'CID-DIUBAH' : selected.cid, selected.cid],
                   ].map(([label, a, b]) => (

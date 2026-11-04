@@ -1,6 +1,11 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import useSWR from 'swr'
+import { initialPrograms, type Program } from '@/mocks/program-data'
+import { programPeriods } from '@/mocks/disbursement-data'
+import { formatPeriod } from '@/lib/utils'
+import { statusIcon, failureReason } from '@/mocks/disbursement-data'
 import {
   Plus,
   Search,
@@ -17,8 +22,6 @@ import { RecipientDialog } from '@/components/features/dashboard/recipients/reci
 import { DisbursementWizard } from '@/components/features/dashboard/disbursements/disbursement-wizard'
 import { DisbursementDetail } from '@/components/features/dashboard/disbursements/disbursement-detail'
 import {
-  periods,
-  programs,
   recipients,
   short,
   useDisbursements,
@@ -32,6 +35,9 @@ import s from '@/components/features/dashboard/disbursements/disbursements.modul
 
 export function Disbursements() {
   const { data, update, operator } = useDisbursements()
+  const { data: catalog = initialPrograms } = useSWR<Program[]>('programs-demo', null, { fallbackData: initialPrograms })
+  const programs = catalog.filter(p => !p.deleted).map(p => ({ ...p, baseline: p.used }))
+  const periods = [...new Set([...catalog.flatMap(p => programPeriods(p.startPeriod, p.endPeriod)), ...data.rows.map(r => r.periodId)])].sort((a, b) => a - b)
   const [status, setStatus] = useState('Semua')
   const [program, setProgram] = useState('Semua')
   const [period, setPeriod] = useState('Semua')
@@ -57,7 +63,7 @@ export function Disbursements() {
     return (
       (status === 'Semua' || t.status === status) &&
       (program === 'Semua' || t.program === program) &&
-      (period === 'Semua' || t.period === period) &&
+      (period === 'Semua' || t.periodId === Number(period)) &&
       `${t.id} ${r.name} ${r.nik} ${t.cid} ${t.hash ?? ''}`
         .toLowerCase()
         .includes(query.toLowerCase())
@@ -115,6 +121,16 @@ export function Disbursements() {
     } catch {
       setNotice('Gagal menyalin. Silakan salin hash melalui detail.')
     }
+  }
+  function exportCsv() {
+    const cell = (value: string | number) => `"${String(value).replace(/^[=+@-]/, "'$&").replace(/"/g, '""')}"`
+    const records = [['ID', 'Program', 'Periode', 'PeriodId', 'Penerima', 'NIK tersamar', 'Nominal', 'Status', 'Alasan', 'CID', 'Status bukti'], ...rows.map(row => {
+      const recipient = recipients.find(r => r.id === row.recipient)
+      return [row.id, row.program, formatPeriod(row.periodId), row.periodId, recipient?.name ?? '', recipient ? masked(recipient.nik) : '', row.amount, row.status, row.status === 'FAILED' ? failureReason(row.reason) : row.reason, row.cid, row.evidenceWithdrawn ? 'DITARIK' : row.cid ? 'TERSEDIA' : 'MENUNGGU']
+    })]
+    const url = URL.createObjectURL(new Blob(['\ufeff' + records.map(record => record.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a'); link.href = url; link.download = 'penyaluran-bulanan.csv'; link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   function recheck(row: Distribution) {
     if (!operator) return
@@ -181,6 +197,7 @@ export function Disbursements() {
                   />
                   <kbd>⌘K</kbd>
                 </label>
+                <button onClick={exportCsv}>Ekspor penyaluran (CSV)</button>
               </div>
               <div className={s.row} style={{ marginTop: 14 }}>
                 <small>
@@ -322,7 +339,7 @@ export function Disbursements() {
                       <select value={period} onChange={(e) => setPeriod(e.target.value)}>
                         <option value="Semua">Semua periode</option>
                         {periods.map((p) => (
-                          <option key={p}>{p}</option>
+                          <option key={p} value={p}>{formatPeriod(p)}</option>
                         ))}
                       </select>
                     </label>
@@ -395,7 +412,7 @@ export function Disbursements() {
                           </td>
                           <td>
                             <span className={`${s.badge} ${s.banner}`}>{t.program}</span>
-                            <small>{t.period}</small>
+                            <small>{formatPeriod(t.periodId)}</small>
                             <b>{money(t.amount)}</b>
                           </td>
                           <td>
@@ -403,11 +420,11 @@ export function Disbursements() {
                             <button disabled={!t.cid} onClick={() => setDetail(t.id)}>
                               Pratinjau bukti
                             </button>
-                            <small>Simulasi</small>
+                            <small>{t.evidenceWithdrawn ? 'DITARIK · Simulasi' : 'Simulasi'}</small>
                           </td>
                           <td>
-                            <span className={`${s.badge} ${s[t.status]}`}>{t.status}</span>
-                            <p>{t.reason}</p>
+<span className={`${s.badge} ${s[t.status]}`} aria-live="polite">{statusIcon[t.status]} {t.status}</span>
+                        <p>{t.status === 'FAILED' ? failureReason(t.reason) : t.reason}</p>
                             {t.block && <small>Blok #{t.block}</small>}
                           </td>
                           <td>
@@ -518,7 +535,7 @@ export function Disbursements() {
               <h2>Jalankan skenario di wizard</h2>
               {[
                 'Penyaluran normal — SUCCESS',
-                'Duplikasi periode — pilih penerima pertama, BLT Tahap I',
+                'Duplikasi periode — pilih penerima pertama, BLT Januari 2026',
                 'Manipulasi nominal — Rp 500.000 bukan Rp 900.000',
                 'Gangguan RPC — PENDING & pemulihan',
                 'Wallet tidak sah / penerima belum FINAL — FAILED',

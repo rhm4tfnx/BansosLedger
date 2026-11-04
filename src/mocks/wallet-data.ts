@@ -156,19 +156,19 @@ export const matrix = [
     ],
   },
   {
-    group: 'LPJ, registri & publik',
-    name: 'LPJ & setoran STS / NTPN',
+    group: 'Laporan realisasi, registri & publik',
+    name: process.env.NEXT_PUBLIC_ENABLE_LPJ_MODULE === 'true' ? 'Laporan realisasi & setoran STS / NTPN' : 'Laporan realisasi',
     tag: 'PMK 254/2015',
     access: [
-      'Susun, catat & cetak LPJ',
+      'Susun, catat & cetak laporan realisasi',
       'Monitoring read-only',
-      'Verifikasi & catatan korektif',
+      'Monitoring read-only',
       'Audit via explorer',
       'Transparansi via explorer',
     ],
   },
   {
-    group: 'LPJ, registri & publik',
+    group: 'Laporan realisasi, registri & publik',
     name: 'Registri wallet & matriks peran',
     tag: 'Read-only',
     access: [
@@ -180,7 +180,7 @@ export const matrix = [
     ],
   },
   {
-    group: 'LPJ, registri & publik',
+    group: 'Laporan realisasi, registri & publik',
     name: 'Penelusuran bukti publik /explorer',
     tag: 'Transparansi',
     access: Array(5).fill('Lihat bukti publik tanpa NIK lengkap'),
@@ -191,7 +191,7 @@ const { ethers } = require("hardhat");
 async function main() {
   const [contractOwner] = await ethers.getSigners();
   const registry = await ethers.getContractAt(
-    "BansosLpjRegistry", "<CONTRACT_ADDRESS>", contractOwner
+    "BansosDisbursementRegistry", "<CONTRACT_ADDRESS>", contractOwner
   );
   const tx = await registry.setAuthorizedWallet(
     "<NEW_WALLET_ADDRESS>", true, "WALLET_KELURAHAN_TAKKALASI"

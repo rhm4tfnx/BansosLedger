@@ -3,6 +3,7 @@ import { NetworkWidget } from '@/components/features/dashboard/monitoring/networ
 import networkStyles from '@/components/features/dashboard/monitoring/monitoring.module.css'
 import { ScrollReveal } from '@/components/ui/scroll-reveal'
 import { SiteFooter } from '@/components/features/navigation/site-footer'
+import { publicLedger } from '@/components/features/public/public-ledger'
 import { BlockExplorer } from '@/components/features/explorer/block-explorer'
 
 export const metadata: Metadata = {
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 export default function ExplorerPage() {
   return (
     <ScrollReveal>
-      <BlockExplorer />
+      <BlockExplorer ledger={publicLedger} />
       <div className={networkStyles.publicWidget}>
         <NetworkWidget />
       </div>

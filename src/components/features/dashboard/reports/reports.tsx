@@ -1,4 +1,5 @@
 'use client'
+import { useRoleAccess } from '@/hooks/use-role-access'
 import { appendAudit } from '@/stores/audit-store'
 
 import { useEffect, useRef, useState } from 'react'
@@ -71,22 +72,25 @@ function Heading({
     </header>
   )
 }
-function Deadline() {
+const LPJ = process.env.NEXT_PUBLIC_ENABLE_LPJ_MODULE === 'true'
+
+function Deadline({ periodEnd, days }: { periodEnd: string; days: number }) {
+  const deadline = new Date(new Date(`${periodEnd}T23:59:59+08:00`).getTime() + days * 864e5)
   const [now, setNow] = useState<number | null>(null)
   useEffect(() => {
     setNow(Date.now())
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
   }, [])
-  const diff = now === null ? 0 : new Date('2026-11-02T23:59:59+08:00').getTime() - now
+  const diff = now === null ? 0 : deadline.getTime() - now
   const seconds = Math.max(0, Math.floor(diff / 1000))
   const late = now !== null && diff < 0
   return (
     <div className={s.inset}>
       <div className={s.spread}>
         <div>
-          <small>Tenggat 30 hari kalender</small>
-          <h3>02 November 2026, 23:59 WITA</h3>
+          <small>Tenggat {days} hari kalender</small>
+          <h3>{deadline.toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'medium', timeZone: 'Asia/Makassar' })} WITA</h3>
         </div>
         <Tag tone={late ? 'red' : diff < 7 * 864e5 ? 'amber' : 'green'}>
           {now === null
@@ -120,6 +124,7 @@ function Deadline() {
 }
 
 export function Reports() {
+  const { can, meta } = useRoleAccess()
   const [program, setProgram] = useState('Semua')
   const [period, setPeriod] = useState('Semua')
   const [area, setArea] = useState('Semua')
@@ -194,11 +199,11 @@ export function Reports() {
   ])
   const exportCSV = (detail = false) => {
     appendAudit({
-      action: detail ? 'Ekspor rincian KPM CSV' : 'Ekspor rekap LPJ CSV',
-      category: 'LPJ',
-      source: 'Halaman LPJ · simulasi',
+      action: detail ? 'Ekspor rincian KPM CSV' : LPJ ? 'Ekspor rekap LPJ CSV' : 'Ekspor rekap laporan realisasi CSV',
+      category: LPJ ? 'LPJ' : 'Rekonsiliasi',
+      source: LPJ ? 'Halaman LPJ · simulasi' : 'Halaman laporan realisasi · simulasi',
     })
-    downloadCSV(detail ? 'rincian-kpm-contoh' : 'rekap-lpj-contoh', [
+    downloadCSV(detail ? 'rincian-kpm-contoh' : LPJ ? 'rekap-lpj-contoh' : 'rekap-realisasi-contoh', [
       detail ? detailHeaders : recapHeaders,
       ...(detail ? detailRows : recapRows),
     ])
@@ -207,10 +212,12 @@ export function Reports() {
     )
   }
   const preview = (kind: 'official' | 'recap' | 'detail') => {
+    if (kind === 'official' && !LPJ) return
+    if (!can(kind === 'official' ? 'report:create' : 'report:read')) return
     appendAudit({
-      action: `Pratinjau dokumen LPJ ${kind}`,
-      category: 'LPJ',
-      source: 'Halaman LPJ · simulasi',
+      action: `Pratinjau dokumen ${LPJ ? 'LPJ' : 'laporan realisasi'} ${kind}`,
+      category: LPJ ? 'LPJ' : 'Rekonsiliasi',
+      source: LPJ ? 'Halaman LPJ · simulasi' : 'Halaman laporan realisasi · simulasi',
     })
     setDocument(
       documentHTML(
@@ -241,10 +248,10 @@ export function Reports() {
           <div>
             <div className={s.titleIcon}>
               <FileText size={20} />
-              <span>LAPORAN & PERTANGGUNGJAWABAN</span>
+              <span>{LPJ ? 'LAPORAN & PERTANGGUNGJAWABAN' : 'LAPORAN REALISASI'}</span>
             </div>
-            <h1>Laporan & LPJ</h1>
-            <p>Rekap penyaluran yang transparan. Pertanggungjawaban yang terukur.</p>
+            <h1>{LPJ ? 'Laporan & LPJ' : 'Laporan Realisasi'}</h1>
+            <p>{LPJ ? 'Rekap penyaluran yang transparan. Pertanggungjawaban yang terukur.' : 'Rekap penyaluran yang transparan dan dapat diverifikasi di blockchain.'}</p>
             <div className={s.actions}>
               <Tag>PMK No. 254/PMK.05/2015</Tag>
               <Tag tone="green">Kelurahan Takkalasi</Tag>
@@ -259,16 +266,16 @@ export function Reports() {
               <FileText size={15} />
               Ekspor PDF
             </button>
-            <button className={s.primary} onClick={() => preview('official')}>
+            {LPJ && <button disabled={!can('report:create')} className={s.primary} onClick={() => preview('official')}>
               <Printer size={15} />
               Cetak surat LPJ
-            </button>
+            </button>}
           </div>
         </header>
         <div className={s.context}>
           <ShieldCheck size={18} />
           <span>
-            <strong>Workspace operator bansos</strong> · Data contoh untuk pratinjau frontend.
+            <strong>Workspace {meta?.shortLabel ?? 'Belum Login'}</strong> · Data contoh untuk pratinjau frontend.
             MongoDB, Besu, IPFS, autentikasi dan penyimpanan belum terhubung.
           </span>
         </div>
@@ -292,21 +299,21 @@ export function Reports() {
                 icon: Building2,
                 name: 'Operator Bansos',
                 place: 'Kelurahan Takkalasi',
-                note: 'Menyusun LPJ, mencatat setoran, mengekspor dan mencetak laporan.',
+                note: LPJ ? 'Menyusun LPJ, mencatat setoran, mengekspor dan mencetak laporan.' : 'Menyusun dan mengekspor laporan realisasi.',
                 badge: 'Workspace aktif',
               },
               {
                 icon: Eye,
                 name: 'Kecamatan Balusu',
                 place: 'Monitoring',
-                note: 'Memantau laporan dan kelengkapan LPJ kelurahan secara read-only.',
+                note: LPJ ? 'Memantau laporan dan kelengkapan LPJ kelurahan secara read-only.' : 'Memantau laporan realisasi secara read-only.',
                 badge: 'Monitoring',
               },
               {
                 icon: ShieldCheck,
                 name: 'Dinas Sosial Kab. Barru',
                 place: 'Verifikasi',
-                note: 'Memberikan status verifikasi dan catatan korektif sesuai Pasal 26 ayat 3.',
+                note: LPJ ? 'Memberikan status verifikasi dan catatan korektif sesuai Pasal 26 ayat 3.' : 'Memantau laporan realisasi secara read-only.',
                 badge: 'Verifikator',
               },
             ].map((r, i) => (
@@ -428,7 +435,7 @@ export function Reports() {
                     <td className={s.mono}>{r.area}</td>
                     <td>
                       <strong>{r.recipients} KPM</strong>
-                      <small>Kuota: {r.quota} KPM</small>
+                      <small>Target: {r.quota} KPM</small>
                     </td>
                     <td className={s.money}>{rupiah(r.budget)}</td>
                     <td className={s.money}>{rupiah(r.realized)}</td>
@@ -449,16 +456,17 @@ export function Reports() {
             {!rows.length && <p className={s.empty}>Tidak ada rekap untuk kombinasi filter ini.</p>}
           </div>
         </section>
-        <div className={s.twoColumns}>
+        {LPJ && <div className={s.twoColumns}>
           <section className={s.card}>
             <Heading
               number="03 · KOMPONEN WAJIB LPJ"
               title="Ringkasan pertanggungjawaban"
               description="PMK 254/PMK.05/2015 · Pasal 32 ayat 2"
               action={
-                <button className={s.primary} onClick={() => setModal('deposit')}>
+                <button disabled={!can('report:create')} className={s.primary} onClick={() => setModal('deposit')}>
                   <Plus size={15} />
                   Catat setoran
+                  <small>Fitur tambahan di luar PRD awal</small>
                 </button>
               }
             />
@@ -483,7 +491,7 @@ export function Reports() {
                         'Pagu per program dan periode',
                         'Nominal SUCCESS pada data contoh',
                         'Wajib disetor atau dijelaskan',
-                        `${returns.length} bukti STS/NTPN · Sisa kas ${rupiah(budget - realized - returned)}`,
+                        `${returns.length} bukti STS/NTPN · Sisa kas ${rupiah(budget - realized - (LPJ ? returned : 0))}`,
                       ][i]
                     }
                   </p>
@@ -526,11 +534,11 @@ export function Reports() {
           </section>
           <section className={s.card}>
             <Heading
-              number="05 · SLA & VERIFIKASI"
+              number="04 · SLA & VERIFIKASI"
               title="Tenggat & alur verifikasi"
               description="Pelaporan 30 hari dan catatan korektif berjenjang."
             />
-            <Deadline />
+            {rows.map(row => <div key={`${row.program}-${row.period}-${row.area}`}><small>{row.program} · {row.period} · {row.area}</small><Deadline periodEnd={row.periodEnd} days={30} /></div>)}
             <h3 className={s.subheading}>
               Riwayat verifikasi <Tag tone="amber">Contoh alur</Tag>
             </h3>
@@ -566,26 +574,14 @@ export function Reports() {
               ))}
             </ol>
             <div className={s.disabledPanel}>
-              <h3>Panel verifikasi & catatan korektif</h3>
-              <p>
-                Hanya Dinas Sosial yang dapat mengubah hasil verifikasi. Workspace operator bersifat
-                read-only untuk bagian ini.
-              </p>
-              <select disabled aria-label="Status verifikasi">
-                <option>Perlu koreksi / catatan korektif</option>
-              </select>
-              <textarea
-                disabled
-                aria-label="Catatan korektif"
-                placeholder="Catatan verifikator Dinas Sosial"
-              />
-              <button disabled>Simpan status verifikasi</button>
+              <h3>Monitoring LPJ — baca saja</h3>
+              <p>Kecamatan dan Dinas Sosial dapat membaca laporan dan membandingkan integritas data tanpa mengubah status atau menulis catatan.</p>
             </div>
           </section>
-        </div>
+        </div>}
         <section className={s.card} id="rekonsiliasi">
           <Heading
-            number="04 · AUDIT KRIPTOGRAFIS"
+            number={`${LPJ ? '05' : '03'} · AUDIT KRIPTOGRAFIS`}
             title="Rekonsiliasi off-chain & on-chain"
             description="Perbandingan koleksi MongoDB dengan state Smart Contract Hyperledger Besu QBFT."
             action={
@@ -606,7 +602,7 @@ export function Reports() {
                   onClick={() => {
                     setAnomaly(true)
                     appendAudit({
-                      action: 'Skenario 5: Manipulasi riwayat LPJ',
+                      action: LPJ ? 'Skenario 5: Manipulasi riwayat LPJ' : 'Skenario 5: Manipulasi riwayat laporan realisasi',
                       category: 'Keamanan',
                       status: 'SECURITY_ALERT',
                       diff: { before: 6700000, after: 6800000 },
@@ -671,7 +667,7 @@ export function Reports() {
         </section>
         <section className={s.card}>
           <Heading
-            number="06 · KETERLACAKAN & BUKTI"
+            number={`${LPJ ? '06' : '04'} · KETERLACAKAN & BUKTI`}
             title="Rincian penerima & bukti realisasi"
             description="Sampel 8 KPM, bukan keseluruhan populasi rekap. Identitas contoh dan hash ilustratif."
             action={
@@ -691,10 +687,10 @@ export function Reports() {
                     if (masked)
                       details.forEach((r) =>
                         appendAudit({
-                          action: 'Buka NIK contoh pada rincian LPJ',
+                          action: LPJ ? 'Buka NIK contoh pada rincian LPJ' : 'Buka NIK contoh pada rincian laporan realisasi',
                           category: 'Akses NIK / PII',
                           dataId: r.name,
-                          source: 'Halaman LPJ · simulasi',
+                          source: LPJ ? 'Halaman LPJ · simulasi' : 'Halaman laporan realisasi · simulasi',
                         }),
                       )
                     setMasked(!masked)
@@ -797,11 +793,11 @@ export function Reports() {
             <span>Ekspor NIK selalu disamarkan</span>
           </div>
         </section>
-        <div className={s.bottomGrid}>
+        <div className={LPJ ? s.bottomGrid : undefined}>
           <section className={s.card}>
             <Heading
-              number="07 · DOKUMEN & METADATA"
-              title="Ekspor & cetak LPJ"
+              number={`${LPJ ? '07' : '05'} · DOKUMEN & METADATA`}
+              title={LPJ ? 'Ekspor & cetak LPJ' : 'Ekspor laporan'}
               description="Setiap dokumen menyertakan cap waktu WITA dan referensi blok contoh saat dibuat."
             />
             <div className={s.inset}>
@@ -839,17 +835,17 @@ export function Reports() {
               </button>
               <button onClick={() => preview('recap')}>PDF rekap</button>
               <button onClick={() => preview('detail')}>PDF rincian KPM</button>
-              <button className={s.primary} onClick={() => preview('official')}>
+              {LPJ && <button disabled={!can('report:create')} className={s.primary} onClick={() => preview('official')}>
                 <Printer size={15} />
                 Cetak surat LPJ resmi
-              </button>
+              </button>}
             </div>
             <p className={s.footnote}>
               PDF menggunakan dialog cetak browser → Simpan sebagai PDF. Nama pejabat dan tanda
               tangan harus dilengkapi setelah verifikasi resmi.
             </p>
           </section>
-          <section className={s.card}>
+          {LPJ && <section className={s.card}>
             <Heading
               number="08 · PEMETAAN KEAMANAN"
               title="Kontrol keamanan & pengujian"
@@ -910,10 +906,10 @@ export function Reports() {
             >
               Jalankan skenario 5 <ArrowUpRight size={14} />
             </button>
-          </section>
+          </section>}
         </div>
         <Dialog
-          open={modal !== null}
+          open={modal !== null && (LPJ || modal !== 'deposit')}
           onOpenChange={(open) => {
             if (!open) setModal(null)
           }}
@@ -929,7 +925,7 @@ export function Reports() {
                   ? 'Catat setoran kembali'
                   : modal === 'proof'
                     ? 'Pratinjau bukti penyerahan'
-                    : 'Pratinjau dokumen LPJ'}
+                    : LPJ ? 'Pratinjau dokumen LPJ' : 'Pratinjau laporan realisasi'}
               </DialogTitle>
               <DialogDescription>
                 {modal === 'deposit'
@@ -945,11 +941,11 @@ export function Reports() {
                   const form = new FormData(e.currentTarget)
                   appendAudit({
                     action: 'Validasi format setoran kembali; belum disimpan',
-                    category: 'LPJ',
+                    category: LPJ ? 'LPJ' : 'Rekonsiliasi',
                     status: 'INFO',
                     dataId: String(form.get('sts')),
                     diff: { sts: form.get('sts'), ntpn: form.get('ntpn') },
-                    source: 'Halaman LPJ · simulasi',
+                    source: LPJ ? 'Halaman LPJ · simulasi' : 'Halaman laporan realisasi · simulasi',
                   })
                   setNotice(
                     'Format setoran valid. Penyimpanan dan anchor Besu belum tersedia; data tidak disimpan.',
@@ -1028,9 +1024,9 @@ export function Reports() {
                     onClick={() => {
                       frame.current?.contentWindow?.focus()
                       appendAudit({
-                        action: 'Permintaan cetak LPJ / PDF',
-                        category: 'LPJ',
-                        source: 'Halaman LPJ · simulasi',
+                        action: LPJ ? 'Permintaan cetak LPJ / PDF' : 'Permintaan cetak laporan realisasi / PDF',
+                        category: LPJ ? 'LPJ' : 'Rekonsiliasi',
+                        source: LPJ ? 'Halaman LPJ · simulasi' : 'Halaman laporan realisasi · simulasi',
                       })
                       frame.current?.contentWindow?.print()
                     }}
@@ -1042,7 +1038,7 @@ export function Reports() {
                 </div>
                 <iframe
                   ref={frame}
-                  title="Dokumen laporan LPJ"
+                  title={LPJ ? 'Dokumen laporan LPJ' : 'Dokumen laporan realisasi'}
                   srcDoc={document}
                   className={s.document}
                 />

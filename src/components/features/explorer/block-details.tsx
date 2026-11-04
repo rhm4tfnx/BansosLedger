@@ -83,7 +83,7 @@ export function BlockDetails({
             <Link href="/explorer" className="text-primary">
               Explorer
             </Link>
-            <span>/ Detail blok</span>
+            <span>/ Detail blok</span><Link href="/transparansi" className="text-primary">Ringkasan publik</Link>
           </nav>
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
             <h1 className="text-3xl font-bold tracking-tight">

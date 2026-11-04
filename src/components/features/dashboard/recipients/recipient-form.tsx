@@ -6,7 +6,7 @@ import {
   regions,
   jobs,
   programs,
-  commitment,
+  demoHash,
   validateRecipient,
 } from '@/mocks/recipient-data'
 import s from '@/components/features/dashboard/recipients/recipients.module.css'
@@ -189,7 +189,7 @@ export function RecipientForm({
           <div className={s.hashPreview}>
             <strong>Pratinjau hash identitas (keccak256) · Simulasi off-chain</strong>
             <code>
-              {/^\d{16}$/.test(data.nik) ? commitment(data.nik) : 'Menunggu input NIK 16 digit...'}
+              {/^\d{16}$/.test(data.nik) ? demoHash(data.id) : 'Menunggu input NIK 16 digit...'}
             </code>
           </div>
           {error && (

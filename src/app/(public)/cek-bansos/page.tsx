@@ -2,6 +2,8 @@ import { CekBansos } from '@/components/features/cek-bansos/cek-bansos'
 import { SiteFooter } from '@/components/features/navigation/site-footer'
 import { SiteHeader } from '@/components/features/navigation/site-header'
 
+export const dynamic = 'force-dynamic'
+
 export default function CekBansosPage() {
   return (
     <>

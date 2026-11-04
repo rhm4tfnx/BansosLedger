@@ -3,7 +3,9 @@
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, CheckCircle2, Copy } from 'lucide-react'
-import { transactions } from '@/mocks/explorer-data'
+import { transactions, blocks } from '@/mocks/explorer-data'
+import { addresses } from '@/constants/explorer-addresses'
+import { formatPeriod } from '@/lib/utils'
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -23,10 +25,10 @@ export function TransactionDetails({
 }) {
   const [tab, setTab] = useState<(typeof tabs)[number]>('Overview')
   const [copyStatus, setCopyStatus] = useState('')
-  const index = transactions.findIndex((item) => item.hash === t.hash)
-  const amount = [300000, 250000, 0, 0][index % 4]
-  const recipient = `REC-2026-${String(index + 1).padStart(3, '0')}`
-  const contract = `0x${'9abcdef0'.repeat(5)}`
+  const index = Math.max(0, transactions.findIndex((item) => item.hash === t.hash))
+  const amount = t.amount
+  const recipient = t.commitment
+  const contract = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || `0x${'9abcdef0'.repeat(5)}`
   const event = ['BatchRecorded', 'DistributionVerified', 'RecipientRegistered', 'BatchAudited'][
     index % 4
   ]
@@ -35,8 +37,12 @@ export function TransactionDetails({
     from: t.address,
     to: contract,
     amount,
-    recipientId: recipient,
-    recipientNIK: '[tidak ditampilkan dalam demo]',
+    program: t.program,
+    period: formatPeriod(t.periodId),
+    periodId: t.periodId,
+    commitment: t.commitment,
+    refId: t.refId,
+    cid: t.cid,
   }
   async function copyHash() {
     try {
@@ -82,7 +88,7 @@ export function TransactionDetails({
             <Link href="/explorer" className="text-primary">
               Explorer
             </Link>
-            <span>/ Detail transaksi</span>
+            <span>/ Detail transaksi</span><Link href="/transparansi" className="text-primary">Ringkasan publik</Link>
           </nav>
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
             <h1 className="text-3xl font-bold tracking-tight">
@@ -140,7 +146,7 @@ export function TransactionDetails({
                 </Row>
                 <Row label="Block">
                   <Link
-                    href={`/explorer/block/${t.id}`}
+                    href={blocks.some(b => b.id === t.id) ? `/explorer/block/${t.id}` : '/explorer'}
                     className="text-primary underline underline-offset-4"
                   >
                     #{t.id}
@@ -150,13 +156,14 @@ export function TransactionDetails({
                   </span>
                 </Row>
                 <Row label="Timestamp">
-                  10 Oktober 2026 · 15:45:{String(30 - index).padStart(2, '0')} UTC
+                  <p>{new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeStyle: 'medium', timeZone: 'Asia/Makassar' }).format(new Date(t.timestamp))} WITA</p>
+                  <p>{new Date(t.timestamp).toISOString()} UTC</p>
                 </Row>
                 <Row label="Confirmations">{index + 1} blok · Finalitas instan (PoA)</Row>
                 <Row label="Otoritas pengirim (From)">
                   <p>{t.signer}</p>
                   <Link
-                    href={`/explorer/address/${t.address}`}
+                    href={addresses.some(a => a.address.toLowerCase() === t.address.toLowerCase()) ? `/explorer/address/${t.address}` : '/explorer/contract'}
                     className="font-mono text-xs text-primary hover:underline"
                   >
                     {t.address}
@@ -165,7 +172,7 @@ export function TransactionDetails({
                 <Row label="Kontrak validasi (To)">
                   <p>BansosLedger: BansosContract</p>
                   <Link
-                    href={`/explorer/address/${contract}`}
+                    href="/explorer/contract"
                     className="font-mono text-xs text-primary hover:underline"
                   >
                     {contract}
@@ -205,19 +212,17 @@ export function TransactionDetails({
               <h2 className="mb-2 text-sm font-semibold">IPFS proof of evidence</h2>
               <dl>
                 <Row label="IPFS hash (proof document)">
-                  <span className="text-muted-foreground">
-                    Belum tersedia — tidak ada dokumen diunggah dalam demo.
-                  </span>
+                  {t.evidenceWithdrawn && <span className="mr-3 rounded-label border px-2 py-1 text-xs">DITARIK</span>}
+                  {t.cid ? <a href={`https://ipfs.io/ipfs/${encodeURIComponent(t.cid)}`} target="_blank" rel="noopener noreferrer" className="break-all text-primary underline">{t.cid}</a> : <span className="text-muted-foreground">Belum tersedia — tidak ada dokumen diunggah dalam demo.</span>}
+                  <p className="text-xs text-muted-foreground">CID ilustrasi; ketersediaan berkas tidak dijamin.</p>
                 </Row>
                 <Row label="Evidence type">
                   Foto bukti penyerahan / dokumen pendukung (ilustrasi)
                 </Row>
-                <Row label="Recipient ID">
+                <Row label="Commitment">
                   <code>{recipient}</code>
                 </Row>
-                <Row label="NIK penerima">
-                  Tidak ditampilkan · Data pribadi penerima tidak disertakan dalam demo.
-                </Row>
+
               </dl>
             </section>
           </>
@@ -240,7 +245,7 @@ export function TransactionDetails({
                   <Row label="From">
                     <code className="text-xs">{t.address}</code>
                   </Row>
-                  <Row label="Recipient ID">{recipient}</Row>
+                  <Row label="Commitment">{recipient}</Row>
                   <Row label="Amount (IDR)">{amount.toLocaleString('id-ID')}</Row>
                 </dl>
               </div>
@@ -283,11 +288,11 @@ export function TransactionDetails({
           </section>
         )}
         <Link
-          href={`/explorer/block/${t.id}?tab=transactions`}
+          href={blocks.some(b => b.id === t.id) ? `/explorer/block/${t.id}?tab=transactions` : '/explorer'}
           className="flex items-center gap-2 text-sm text-primary"
         >
           <ArrowLeft size={15} />
-          Kembali ke transaksi dalam blok #{t.id}
+          {blocks.some(b => b.id === t.id) ? `Kembali ke transaksi dalam blok #${t.id}` : 'Kembali ke explorer'}
         </Link>
       </main>
     </>

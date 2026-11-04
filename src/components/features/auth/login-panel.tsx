@@ -2,6 +2,13 @@
 
 import { useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import type { FormEvent } from 'react'
+import useSWR from 'swr'
+import { hexlify, toUtf8Bytes } from 'ethers'
+import { hasPermission } from '@/lib/rbac'
+import { getWalletProvider, useConnectedWallet } from '@/hooks/use-connected-wallet'
+import type { Role } from '@/types/rbac'
 import {
   ArrowRight,
   Eye,
@@ -23,12 +30,63 @@ export function LoginPanel() {
   const hydrated = useSyncExternalStore(subscribe, clientSnapshot, serverSnapshot)
   const [tab, setTab] = useState<'account' | 'wallet'>('account')
   const [visible, setVisible] = useState(false)
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  function dashboardDestination() {
+    const next = new URLSearchParams(window.location.search).get('next')
+    return next && /^\/dashboard(?:\/[a-zA-Z0-9_-]+)*$/.test(next) ? next : '/dashboard'
+  }
+  async function handleCredentialSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (isSubmitting) return
+    setIsSubmitting(true)
+    setNotice('')
+    try {
+      const response = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message ?? 'Login gagal.')
+      setPassword('')
+      await mutate()
+      if (data.role === 'OPERATOR_KELURAHAN') setNotice('Sesi Operator Kelurahan aktif. Masuk ke dashboard atau lanjutkan verifikasi wallet.')
+      else { router.push(dashboardDestination()); router.refresh() }
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Tidak dapat menghubungi server.') }
+    finally { setIsSubmitting(false) }
+  }
+  const { data: session, mutate } = useSWR<{ role: Role | null }>('/api/auth/session', async (url: string) => {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error('Tidak dapat memeriksa sesi.')
+    return response.json()
+  })
+  const wallet = useConnectedWallet()
+  const canVerifyWallet = hasPermission(session?.role, 'wallet:verify-session')
+  const [verifying, setVerifying] = useState(false)
+  async function verifyWallet() {
+    if (!canVerifyWallet || !wallet.address || verifying) return
+    setVerifying(true)
+    try {
+      const provider = getWalletProvider()
+      if (!provider) throw new Error('MetaMask tidak tersedia.')
+      const response = await fetch('/api/auth/wallet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: wallet.address, chainId: wallet.chainId }) })
+      const challenge = await response.json()
+      if (!response.ok) throw new Error(challenge.message)
+      const signature = await provider.request({ method: 'personal_sign', params: [hexlify(toUtf8Bytes(challenge.message)), wallet.address] })
+      const chainId = await provider.request({ method: 'eth_chainId' })
+      const result = await fetch('/api/auth/wallet', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: wallet.address, chainId, signature }) })
+      const verified = await result.json()
+      if (!result.ok) throw new Error(verified.message)
+      await mutate()
+      setNotice('Kepemilikan wallet telah diverifikasi server. Sesi diperbarui.')
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Verifikasi gagal.') }
+    finally { setVerifying(false) }
+  }
   const [wrongNetwork, setWrongNetwork] = useState(false)
   const [notice, setNotice] = useState('')
   const buttonClass =
     'flex min-h-12 w-full items-center justify-center gap-3 rounded-control bg-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-primary-hover'
   const previewNotice =
-    'Ini pratinjau tampilan. Login, koneksi MetaMask, tanda tangan, dan pergantian jaringan belum diaktifkan.'
+    'Pilih jaringan Besu melalui MetaMask, kemudian ulangi pemeriksaan wallet.'
 
   return (
     <section aria-label="Login pengelola" className="border bg-surface">
@@ -42,6 +100,8 @@ export function LoginPanel() {
           <button
             key={id}
             type="button"
+            disabled={id === 'wallet' && !canVerifyWallet}
+            title={id === 'wallet' && !canVerifyWallet ? 'Sesi akun terverifikasi dengan izin wallet:verify-session diperlukan.' : undefined}
             aria-pressed={tab === id}
             onClick={() => {
               setTab(id)
@@ -63,10 +123,7 @@ export function LoginPanel() {
             </p>
             {hydrated ? (
               <form
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  setNotice(previewNotice)
-                }}
+                onSubmit={handleCredentialSubmit}
                 className="space-y-5"
               >
                 <div>
@@ -75,6 +132,8 @@ export function LoginPanel() {
                   </label>
                   <input
                     id="login-email"
+                    value={email}
+                    onChange={event => setEmail(event.target.value)}
                     data-lpignore="true"
                     type="email"
                     autoComplete="username"
@@ -90,6 +149,8 @@ export function LoginPanel() {
                   <div className="relative">
                     <input
                       id="login-password"
+                      value={password}
+                      onChange={event => setPassword(event.target.value)}
                       data-lpignore="true"
                       type={visible ? 'text' : 'password'}
                       autoComplete="current-password"
@@ -108,8 +169,8 @@ export function LoginPanel() {
                     </button>
                   </div>
                 </div>
-                <button className={buttonClass} type="submit">
-                  Masuk & lanjutkan
+                <button disabled={isSubmitting} className={buttonClass} type="submit">
+                  {isSubmitting ? 'Memverifikasi…' : 'Masuk ke Dashboard'}
                   <ArrowRight size={17} />
                 </button>
               </form>
@@ -137,7 +198,7 @@ export function LoginPanel() {
                 {wrongNetwork ? 'JARINGAN TIDAK SESUAI' : 'BELUM TERHUBUNG'}
               </span>
             </div>
-            <button type="button" className={buttonClass} onClick={() => setNotice(previewNotice)}>
+            <button type="button" disabled={!canVerifyWallet || verifying} className={buttonClass} onClick={wallet.connect}>
               <Wallet size={18} />
               Connect MetaMask
               <ArrowUpRight size={16} />
@@ -153,10 +214,11 @@ export function LoginPanel() {
               </p>
               <button
                 type="button"
-                disabled
+                disabled={!canVerifyWallet || !wallet.address || verifying}
+                onClick={verifyWallet}
                 className="mt-4 min-h-11 w-full cursor-not-allowed rounded-control border bg-background px-3 text-sm text-body-copy"
               >
-                Hubungkan wallet terlebih dahulu
+                {verifying ? 'Memverifikasi tanda tangan…' : wallet.address ? 'Tanda tangani nonce server' : 'Hubungkan wallet terlebih dahulu'}
               </button>
             </div>
             <label className="mt-5 flex cursor-pointer items-center gap-2 text-xs text-body-copy">
@@ -189,6 +251,10 @@ export function LoginPanel() {
             )}
           </>
         )}
+        {canVerifyWallet && <div className="mt-5 flex flex-wrap gap-3"><button className={buttonClass} onClick={() => { router.push(dashboardDestination()); router.refresh() }}>Masuk ke Dashboard</button><button onClick={() => setTab('wallet')} className="text-sm text-primary underline">Lanjut verifikasi wallet</button></div>}
+        {process.env.NODE_ENV !== 'production' && tab === 'account' && <div className="mt-5 space-y-2 border p-3 text-xs"><p>Pengujian akun instansi — isi kata sandi sesuai konfigurasi server.</p>{[
+          ['Operator Kelurahan', 'operator@takkalasi.barru.go.id'], ['Kecamatan Balusu', 'monitoring@balusu.barru.go.id'], ['Dinas Sosial', 'verifikasi@dinsos.barru.go.id'],
+        ].map(([label, address]) => <button key={address} type="button" className="mr-2 rounded border p-2" onClick={() => { setEmail(address); setPassword('') }}>{label}</button>)}</div>}
         <p
           role="status"
           className={
@@ -204,8 +270,7 @@ export function LoginPanel() {
           <div>
             <p className="text-xs font-medium">Dirancang untuk akses yang terlindungi</p>
             <p className="mt-1 text-xs leading-5 text-body-copy">
-              Implementasi backend akan menggunakan cookie httpOnly, timeout sesi, logout,
-              pembatasan percobaan login, dan pesan error yang tidak mengungkap data akun.
+              Sesi menggunakan cookie httpOnly, masa berlaku terbatas, dan logout. Role ditentukan server. Pembatasan percobaan login terdistribusi dan pencabutan sesi terpusat masih diperlukan sebelum production.
             </p>
           </div>
         </div>

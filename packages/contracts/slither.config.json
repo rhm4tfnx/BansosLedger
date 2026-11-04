@@ -1,0 +1,8 @@
+{
+  "filter_paths": "node_modules|@openzeppelin|contracts/test/",
+  "exclude_dependencies": true,
+  "fail_on": "medium",
+  "json": "reports/slither.json",
+  "sarif": "reports/slither.sarif",
+  "compile_force_framework": "hardhat"
+}

@@ -1,4 +1,6 @@
 'use client'
+import { useRoleAccess } from '@/hooks/use-role-access'
+import { BESU_CHAIN_ID } from '@/lib/blockchain/provider'
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { Download, ShieldCheck, Copy, LockKeyhole, X } from 'lucide-react'
@@ -16,6 +18,7 @@ import {
 import s from '@/components/features/dashboard/audit-log/activity-log.module.css'
 import w from '@/components/features/dashboard/wallet/wallet.module.css'
 export function WalletRegistry() {
+  const { can } = useRoleAccess()
   const [role, setRole] = useState(actors[0])
   const [filter, setFilter] = useState('Semua entri')
   const [session, setSession] = useState(signer)
@@ -33,10 +36,11 @@ export function WalletRegistry() {
     }
   }
   function test(address: string) {
+    if (!can('wallet:verify-session')) return
     const ok = address === signer
     if (!ok) setAttempts((n) => n + 1)
     setTrace(
-      `[SIMULASI LOKAL — bukan eksekusi EVM]\n[CALL] BansosLpjRegistry.catatPenyaluran()\n[FROM] ${address}\n[CHECK] onlyAuthorizedKelurahan\n[RESULT] ${ok ? 'SUCCESS · signer cocok' : 'REVERTED · UnauthorizedSigner(address)'}\n[STATE] Tidak ada perubahan state blockchain.\n[AUDIT] Tidak dikirim ke MongoDB atau RPC.`,
+      `[SIMULASI LOKAL — bukan eksekusi EVM]\n[CALL] BansosDisbursementRegistry.catatPenyaluran()\n[FROM] ${address}\n[CHECK] onlyAuthorizedKelurahan\n[RESULT] ${ok ? 'SUCCESS · signer cocok' : 'REVERTED · UnauthorizedSigner(address)'}\n[STATE] Tidak ada perubahan state blockchain.\n[AUDIT] Tidak dikirim ke MongoDB atau RPC.`,
     )
   }
   function exportCsv() {
@@ -130,7 +134,7 @@ export function WalletRegistry() {
               <h2>Akses lihat saja untuk seluruh peran internal</h2>
             </div>
             <div className={s.actions}>
-              {actors.slice(0, 3).map((a) => (
+              {can('wallet:verify-session') && actors.slice(0, 3).map((a) => (
                 <button key={a} aria-pressed={role === a} onClick={() => setRole(a)}>
                   {a}
                 </button>
@@ -174,7 +178,7 @@ export function WalletRegistry() {
               <span className={s.eyebrow}>BAGIAN 2 · STATE SMART CONTRACT · CONTOH</span>
               <h2>Daftar wallet berwenang pada smart contract</h2>
               <p>
-                BansosLpjRegistry.sol · ilustrasi registri on-chain, bukan pembacaan state langsung.
+                BansosDisbursementRegistry.sol · ilustrasi registri on-chain, bukan pembacaan state langsung.
               </p>
             </div>
             <div className={s.actions}>
@@ -258,7 +262,7 @@ export function WalletRegistry() {
           <section className={s.card}>
             <span className={s.eyebrow}>BAGIAN 5A · PEMBANDING WALLET SIMULASI</span>
             <h2>Sesi MetaMask vs state smart contract</h2>
-            <label htmlFor="wallet-session">Pilih wallet sesi contoh</label>
+            {can('wallet:verify-session') && <><label htmlFor="wallet-session">Pilih wallet sesi contoh</label>
             <select
               id="wallet-session"
               className={w.select}
@@ -270,7 +274,15 @@ export function WalletRegistry() {
               <option value={validators[0].address}>Kunci validator Besu</option>
               <option value={wallets[2].address}>Wallet dicabut</option>
               <option value={'0x' + 'de'.repeat(20)}>Wallet eksternal tidak berwenang</option>
-            </select>
+            </select></>}
+            {!can('wallet:verify-session') && <div className={s.inset} role="status">Mode baca saja. Hanya Operator yang dapat mengikat atau mengubah wallet.</div>}
+            <div className={s.inset}>
+              <div className={s.statRow}>authorizedWallet <code>{signer}</code></div>
+              <div className={s.statRow}>owner <code>{owner}</code></div>
+              <div className={s.statRow}>Status ikat wallet <strong>Terikat (simulasi)</strong></div>
+              <div className={s.statRow}>Jaringan / chainId <strong>Besu / {BESU_CHAIN_ID}</strong></div>
+              <div className={s.statRow}>Status pause <strong>Aktif (simulasi)</strong></div>
+            </div>
             <div className={s.grid}>
               <div className={s.inset}>
                 <small>Wallet sesi simulasi</small>
@@ -302,12 +314,12 @@ export function WalletRegistry() {
               Memperagakan hasil pemeriksaan modifier tanpa mengirim transaksi atau menggunakan
               private key.
             </p>
-            <div className={s.actions}>
+            {can('wallet:verify-session') && <div className={s.actions}>
               <button onClick={() => test('0x' + 'de'.repeat(20))}>Uji wallet ilegal</button>
               <button onClick={() => test(validators[0].address)}>Uji kunci validator</button>
               <button onClick={() => test(signer)}>Uji wallet resmi</button>
               <button onClick={() => test(session)}>Uji sesi terpilih</button>
-            </div>
+            </div>}
             <pre className={w.terminal} aria-live="polite">
               {trace}
             </pre>
@@ -341,7 +353,7 @@ export function WalletRegistry() {
               <pre className={w.terminal}>{rotationScript}</pre>
             </div>
             <div>
-              <h3>contracts/BansosLpjRegistry.sol · Solidity ^0.8.24</h3>
+              <h3>contracts/BansosDisbursementRegistry.sol · Solidity ^0.8.24</h3>
               <pre className={w.terminal}>{contractCode}</pre>
             </div>
           </div>
@@ -406,14 +418,14 @@ export function WalletRegistry() {
               <X size={16} />
             </button>
           </div>
-          <h2 id="slither-title">Pratinjau laporan audit BansosLpjRegistry.sol</h2>
+          <h2 id="slither-title">Pratinjau laporan audit BansosDisbursementRegistry.sol</h2>
           <p>
             Belum ada audit dijalankan. Panel ini menggambarkan laporan yang akan ditampilkan
             setelah hasil SAST tersedia; bukan sertifikasi keamanan.
           </p>
           <pre
             className={w.terminal}
-          >{`$ slither contracts/BansosLpjRegistry.sol\n\nStatus: NOT RUN — contoh struktur laporan\nAccess control / onlyAuthorizedKelurahan: BELUM DIUJI\nOwner rotation / onlyOwner: BELUM DIUJI\nReentrancy & unchecked calls: BELUM DIUJI\nTimestamp dependence & weak PRNG: BELUM DIUJI\n\nHigh: —    Medium: —    Low: —\nCompiler target: Solidity 0.8.24\nVersi Slither & jumlah detector: belum tersedia`}</pre>
+          >{`$ slither contracts/BansosDisbursementRegistry.sol\n\nStatus: NOT RUN — contoh struktur laporan\nAccess control / onlyAuthorizedKelurahan: BELUM DIUJI\nOwner rotation / onlyOwner: BELUM DIUJI\nReentrancy & unchecked calls: BELUM DIUJI\nTimestamp dependence & weak PRNG: BELUM DIUJI\n\nHigh: —    Medium: —    Low: —\nCompiler target: Solidity 0.8.24\nVersi Slither & jumlah detector: belum tersedia`}</pre>
           <button className={s.primary} onClick={() => modal.current?.close()}>
             Tutup laporan
           </button>
