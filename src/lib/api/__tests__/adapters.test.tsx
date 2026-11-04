@@ -543,6 +543,8 @@ describe('API DTO -> ViewModel adapters (all domains)', () => {
     expect(validatorsVm.items[0]?.institution).toBe('Kelurahan Takkalasi')
     expect('uptime' in validatorsVm.items[0]!).toBe(false)
     expect('reputation' in validatorsVm.items[0]!).toBe(false)
+    expect(validatorsVm.count).toBe(1)
+    expect(toExplorerValidatorsViewModel({ data: [], count: null }).count).toBeNull()
 
     expect(toExplorerSearchResultViewModel(blockDto).kind).toBe('block')
     expect(toExplorerSearchResultViewModel(txDto).kind).toBe('tx')

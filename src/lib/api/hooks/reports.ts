@@ -42,10 +42,9 @@ export function useRealizationReportQuery(filters: RealizationReportFilters = {}
 }
 
 export interface ReconciliationReportFilters {
-  programId?: string
-  period?: number
-  anomalyPage?: number
-  limitPerCategory?: number
+  page?: number
+  limit?: number
+  sort?: string
   enabled?: boolean
 }
 
@@ -68,12 +67,18 @@ export function useReconciliationReportQuery(filters: ReconciliationReportFilter
 export interface ExportReportCsvInput {
   programId?: string
   period?: number
+  page?: number
+  limit?: number
+  sort?: string
 }
 
 export function useExportReportCsvMutation() {
   return useMutation<string, ApiClientError, ExportReportCsvInput>({
     mutationFn: (filters) => {
-      const path = buildApiPath('/api/v1/reports/export', { ...filters })
+      const path = buildApiPath('/api/v1/reports/export', {
+        ...filters,
+        format: 'csv',
+      })
       return apiFetch<string>(path, {
         headers: {
           Accept: 'text/csv, application/problem+json',

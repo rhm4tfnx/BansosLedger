@@ -119,7 +119,7 @@ export function useExplorerContractQuery(enabled = true) {
 }
 
 export function useExplorerValidatorsQuery(enabled = true) {
-  return useQuery<{ items: ExplorerValidatorViewModel[]; count: number }, ApiClientError>({
+  return useQuery<{ items: ExplorerValidatorViewModel[]; count: number | null }, ApiClientError>({
     queryKey: queryKeys.explorer.validators(),
     queryFn: async ({ signal }) => {
       const dto = await apiFetch('/api/v1/explorer/validators', {

@@ -127,7 +127,7 @@ export function toExplorerContractViewModel(dto: ExplorerContractDto): ExplorerC
 
 export function toExplorerValidatorsViewModel(dto: ExplorerValidatorsDto): {
   items: ExplorerValidatorViewModel[]
-  count: number
+  count: number | null
 } {
   const items = dto.data.map((validator) => ({
     address: validator.address,
@@ -136,7 +136,8 @@ export function toExplorerValidatorsViewModel(dto: ExplorerValidatorsDto): {
   }))
   return {
     items,
-    count: dto.count ?? items.length,
+    // null means the QBFT RPC is not exposed; the UI shows "-" instead of 0.
+    count: dto.count,
   }
 }
 

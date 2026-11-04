@@ -9,7 +9,7 @@ import { queryKeys } from '../keys'
 
 export function useNetworkStatusQuery(options: {
   enabled?: boolean
-  refetchInterval?: number | false
+  refetchInterval?: number | false | (() => number | false)
 } = {}) {
   return useQuery<NetworkStatusViewModel, ApiClientError>({
     queryKey: queryKeys.chain.networkStatus(),
@@ -22,6 +22,7 @@ export function useNetworkStatusQuery(options: {
     },
     enabled: options.enabled ?? true,
     refetchInterval: options.refetchInterval,
+    refetchIntervalInBackground: false,
   })
 }
 

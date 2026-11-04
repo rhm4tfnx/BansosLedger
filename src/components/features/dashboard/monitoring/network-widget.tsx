@@ -1,87 +1,48 @@
+'use client'
+
+import { useNetworkStatusQuery } from '@/lib/api/hooks'
+import { EmptyState, ErrorState, TableSkeleton } from '@/components/features/dashboard/shared/states'
+import { HashLink } from '@/components/features/dashboard/shared/hash-link'
 import s from '@/components/features/dashboard/monitoring/monitoring.module.css'
-export const institutions = [
-  'Kelurahan Takkalasi',
-  'Kecamatan Balusu',
-  'Dinas Sosial Kab. Barru',
-  'Auditor / Inspektorat',
-]
-export type NetworkBlock = {
-  height: number
-  proposer: number
-  tx: number
-  votes: number
-  time: string
-}
-export const initialBlocks: NetworkBlock[] = [0, 1, 2, 3].map((i) => ({
-  height: 4892104 - i,
-  proposer: 3 - i,
-  tx: [2, 1, 3, 1][i],
-  votes: 4,
-  time: ['09:19:04', '09:19:02', '09:19:00', '09:18:58'][i],
-}))
-export function NetworkWidget({
-  blocks = initialBlocks,
-  online = [true, true, true, true],
-}: {
-  blocks?: NetworkBlock[]
-  online?: boolean[]
-}) {
+
+export function NetworkWidget() {
+  const query = useNetworkStatusQuery()
+  const network = query.data
   return (
     <section className={s.card} aria-label="Ringkasan jaringan publik">
       <header className={s.heading}>
         <div>
-          <span className={s.eyebrow}>TRANSPARANSI KONSENSUS · PUBLIK & AUDITOR</span>
+          <span className={s.eyebrow}>TRANSPARANSI KONSENSUS · PUBLIK &amp; AUDITOR</span>
           <h2>Kesehatan jaringan BansosLedger</h2>
-          <p>Kabupaten Barru · Data ilustrasi, bukan telemetri langsung.</p>
+          <p>Kabupaten Barru · Data langsung dari node jaringan.</p>
         </div>
         <span className={s.badge}>
-          {online.filter(Boolean).length}/4 validator aktif · Simulasi
+          {network ? (network.validatorCount === null ? '-' : `${network.validatorCount} validator`) : '-'}
         </span>
       </header>
-      <div className={s.institutions}>
-        {institutions.map((name, i) => (
-          <span key={name}>
-            <i className={online[i] ? s.dot : s.offDot} />
-            {name}
-          </span>
-        ))}
-      </div>
-      <p className={s.meta}>
-        Blok terakhir #{blocks[0].height} · Target interval 2 detik · Finalitas langsung saat kuorum
-        terpenuhi
-      </p>
-      <div className={s.scroll}>
-        <table>
-          <thead>
-            <tr>
-              {[
-                'Nomor blok',
-                'Validator pengusul (round-robin)',
-                'Jumlah TX',
-                'Gas used',
-                'Suara QBFT',
-                'Waktu blok (WITA)',
-              ].map((x) => (
-                <th key={x}>{x}</th>
+      {query.isPending ? (
+        <TableSkeleton rows={3} label="Memuat status jaringan" />
+      ) : query.isError ? (
+        <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+      ) : network ? (
+        <>
+          <p className={s.meta}>
+            Blok terakhir #{network.latestBlock.toLocaleString('id-ID')} · {network.timestampWita} · Status {network.status}
+          </p>
+          {network.validators.length === 0 ? (
+            <EmptyState>Daftar validator belum tersedia.</EmptyState>
+          ) : (
+            <div className={s.institutions}>
+              {network.validators.map((v) => (
+                <span key={v.address}>
+                  <i className={s.dot} />
+                  {v.institution} <HashLink hash={v.address} short={v.addressShort} kind="address" />
+                </span>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {blocks.slice(0, 6).map((b) => (
-              <tr key={b.height}>
-                <td className={s.mono}>#{b.height}</td>
-                <td>{institutions[b.proposer]}</td>
-                <td>{b.tx} Tx</td>
-                <td className={s.mono}>{(b.tx * 68420).toLocaleString('id-ID')}</td>
-                <td>
-                  <span className={s.good}>{b.votes}/4 validator</span>
-                </td>
-                <td className={s.mono}>{b.time}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </div>
+          )}
+        </>
+      ) : null}
     </section>
   )
 }

@@ -1,99 +1,96 @@
-import { categories, type AuditEntry } from '@/stores/audit-store'
+'use client'
+import { useState } from 'react'
+import { ShieldCheck } from 'lucide-react'
+import { useVerifyAuditLogsQuery } from '@/lib/api/hooks/audit'
+import { ErrorState, TableSkeleton } from '@/components/features/dashboard/shared/states'
 import s from '@/components/features/dashboard/audit-log/activity-log.module.css'
-export function AuditPanels({
-  logs,
-  select,
-}: {
-  logs: AuditEntry[]
-  select: (category: string) => void
-}) {
+
+const MAX_SPAN = 4999
+
+function SeqList({ label, values }: { label: string; values: number[] }) {
   return (
-    <>
-      <div className={s.columns}>
-        <section className={s.card}>
-          <span className={s.eyebrow}>WHO DID WHAT AND WHEN</span>
-          <h2>Cakupan aktivitas operasional & siklus data</h2>
-          <div className={s.grid}>
-            {categories.map((category) => (
-              <button className={s.metric} key={category} onClick={() => select(category)}>
-                <span>{category}</span>
-                <strong>
-                  {logs.filter((l) => l.category === category).length} <small>aktivitas</small>
-                </strong>
-                <small>Filter catatan sesi berdasarkan kategori</small>
-              </button>
-            ))}
-          </div>
-        </section>
-        <section className={s.card}>
-          <span className={s.eyebrow}>ISO/IEC 25010:2023 · SECURITY & SAFETY</span>
-          <h2>Pemetaan kebutuhan keamanan</h2>
-          <p>Indikator kebutuhan, bukan bukti kelulusan pengujian.</p>
-          <div className={s.grid}>
-            {[
-              ['Confidentiality', 'Audit akses NIK tanpa menyimpan NIK penuh dalam log.'],
-              [
-                'Integrity',
-                'UI tidak menyediakan edit atau hapus log. Proteksi server belum tersedia.',
-              ],
-              ['Authenticity', 'Verifikasi akun dan wallet signer memerlukan backend.'],
-              ['Non-repudiation', 'Bukti TxHash, CID, dan tanda tangan belum diverifikasi.'],
-              [
-                'Accountability',
-                'Aksi dan waktu WITA tercatat selama sesi. Identitas/IP belum terverifikasi.',
-              ],
-              ['Safety (Fail-Safe)', 'Simulasi penguncian; belum terhubung ke RPC dan kuorum.'],
-            ].map(([title, text]) => (
-              <article className={s.inset} key={title}>
-                <b>{title}</b>
-                <p>{text}</p>
+    <article className={s.inset}>
+      <b>{label}</b>
+      <p>{values.length === 0 ? 'Tidak ada' : values.join(', ')}</p>
+    </article>
+  )
+}
+
+/** On-demand hash chain verification (runs only when the button is clicked). */
+export function AuditPanels({ latestSeq }: { latestSeq: number }) {
+  const [fromText, setFromText] = useState('1')
+  const [toText, setToText] = useState('')
+  const [range, setRange] = useState<{ from: number; to: number } | null>(null)
+  const effectiveTo = toText || String(Math.max(latestSeq, 1))
+  const from = Number(fromText)
+  const to = Number(effectiveTo)
+  const valid = Number.isInteger(from) && Number.isInteger(to) && from >= 1 && to >= from && to - from <= MAX_SPAN
+  const verify = useVerifyAuditLogsQuery(range?.from ?? 1, range?.to ?? 1, range !== null)
+
+  return (
+    <div className={s.columns}>
+      <section className={s.card}>
+        <span className={s.eyebrow}>INTEGRITAS HASH-CHAIN</span>
+        <h2>Verifikasi rantai audit</h2>
+        <p>Periksa urutan dan hash entri log audit pada rentang nomor urut tertentu (maksimal 5.000 entri).</p>
+        <div className={s.filters}>
+          <label>
+            Dari seq
+            <input type="number" min={1} value={fromText} onChange={(e) => setFromText(e.target.value)} />
+          </label>
+          <label>
+            Sampai seq
+            <input type="number" min={1} value={effectiveTo} onChange={(e) => setToText(e.target.value)} />
+          </label>
+          <button
+            className={s.primary}
+            disabled={!valid || verify.isFetching}
+            onClick={() => {
+              if (range && range.from === from && range.to === to) void verify.refetch()
+              else setRange({ from, to })
+            }}
+          >
+            <ShieldCheck size={15} /> {verify.isFetching ? 'Memverifikasi…' : 'Verifikasi rantai'}
+          </button>
+        </div>
+        {!valid && <p role="alert">Rentang tidak valid: seq awal ≥ 1, seq akhir ≥ awal, selisih maksimal 4.999.</p>}
+        <div aria-live="polite">
+          {range && verify.isFetching && !verify.data ? (
+            <TableSkeleton rows={2} label="Memverifikasi rantai audit" />
+          ) : range && verify.isError ? (
+            <ErrorState error={verify.error} onRetry={() => void verify.refetch()} />
+          ) : range && verify.data ? (
+            <div className={s.grid}>
+              <article className={s.inset}>
+                <b>{verify.data.valid ? '✓ Rantai valid' : '× Rantai tidak valid'}</b>
+                <p>
+                  Rentang {range.from}–{range.to}
+                  {verify.data.failedAt !== null && ` · gagal pada seq ${verify.data.failedAt}`}
+                </p>
               </article>
-            ))}
-          </div>
-        </section>
-      </div>
-      <div className={s.columns}>
-        <section className={s.card}>
-          <span className={s.eyebrow}>TABEL 3.3 · LIMA SKENARIO</span>
-          <h2>Penolakan & peringatan keamanan</h2>
-          {[
-            'Duplikasi penyaluran',
-            'Ketidaksesuaian nominal',
-            'Wallet tidak berwenang',
-            'KPM tidak valid',
-            'Manipulasi riwayat',
-          ].map((name, i) => (
-            <div className={s.statRow} key={name}>
-              <span>
-                0{i + 1} · {name}
-              </span>
-              <b>{logs.filter((l) => l.action.includes(`Skenario ${i + 1}:`)).length} catatan</b>
+              <SeqList label="Seq hilang" values={verify.data.missingSequences} />
+              <SeqList label="Seq tidak valid" values={verify.data.invalidSequences} />
+              <SeqList label="Entri dengan celah" values={verify.data.gapEntries} />
             </div>
-          ))}
-        </section>
-        <section className={s.card}>
-          <span className={s.eyebrow}>KORELASI TIGA LAPISAN PENYIMPANAN</span>
-          <h2>Dari data operasional ke bukti permanen</h2>
+          ) : null}
+        </div>
+      </section>
+      <section className={s.card}>
+        <span className={s.eyebrow}>ISO/IEC 25010:2023 · SECURITY</span>
+        <h2>Prinsip log audit</h2>
+        <div className={s.grid}>
           {[
-            ['F1', 'Off-chain · MongoDB', 'Data_ID · identitas, status PENDING, perubahan nilai'],
-            ['F2', 'Terdistribusi · Pinata / IPFS', 'CID · bukti JPG/PDF dan referensi dokumen'],
-            [
-              'F3',
-              'On-chain · Hyperledger Besu QBFT',
-              'TxHash · nomor blok, signer dan hasil SUCCESS / FAILED',
-            ],
-          ].map(([n, title, desc]) => (
-            <article className={s.phase} key={n}>
-              <span className={s.badge}>{n}</span>
-              <div>
-                <b>{title}</b>
-                <p>{desc}</p>
-              </div>
+            ['Confidentiality', 'NIK tidak pernah dicatat pada log audit.'],
+            ['Integrity', 'Log append-only dengan rantai hash; tidak ada jalur ubah atau hapus.'],
+            ['Accountability', 'Setiap aksi tercatat dengan pengguna, peran, IP, dan waktu.'],
+          ].map(([title, text]) => (
+            <article className={s.inset} key={title}>
+              <b>{title}</b>
+              <p>{text}</p>
             </article>
           ))}
-          <small>Referensi SIM-* pada simulator bukan bukti kriptografis.</small>
-        </section>
-      </div>
-    </>
+        </div>
+      </section>
+    </div>
   )
 }

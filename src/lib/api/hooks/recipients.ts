@@ -58,16 +58,29 @@ export function useRecipientsQuery(filters: RecipientsQueryFilters = {}) {
   })
 }
 
+export interface RecipientDetailQueryOptions {
+  limit?: number
+  sort?: string
+  enabled?: boolean
+}
+
 export function useRecipientDetailQuery(
   id: string | null | undefined,
   historyPage = 1,
-  enabled = true,
+  optionsOrEnabled: boolean | RecipientDetailQueryOptions = true,
 ) {
+  const options: RecipientDetailQueryOptions =
+    typeof optionsOrEnabled === 'boolean'
+      ? { enabled: optionsOrEnabled }
+      : optionsOrEnabled
+  const { limit, sort, enabled = true } = options
   return useQuery<RecipientDetailViewModel, ApiClientError>({
-    queryKey: queryKeys.recipients.detail(id ?? '', historyPage),
+    queryKey: [...queryKeys.recipients.detail(id ?? '', historyPage), { limit, sort }],
     queryFn: async ({ signal }) => {
       const path = buildApiPath(`/api/v1/recipients/${encodeURIComponent(id ?? '')}`, {
         page: historyPage,
+        limit,
+        sort,
       })
       const dto = await apiFetch(path, {
         schema: recipientDetailDtoSchema,

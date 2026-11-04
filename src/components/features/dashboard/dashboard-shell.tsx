@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import Link from 'next/link'
@@ -10,6 +10,7 @@ import styles from './overview/dashboard.module.css'
 import { ForceChangePasswordDialog } from '@/components/features/auth/force-change-password-dialog'
 import { isDevRolePreviewEnabled, RoleAccessProvider, useRoleAccess } from '@/hooks/use-role-access'
 import { useLogoutMutation } from '@/lib/api/hooks/auth'
+import { useDashboardSummaryQuery, useNetworkStatusQuery } from '@/lib/api/hooks'
 import { roles, type Role, type Permission } from '@/types/rbac'
 import { ROLE_METADATA, dashboardRoutePermissions } from '@/lib/rbac'
 
@@ -18,7 +19,7 @@ const navigation = [
   { label: 'Penerima Bantuan', href: '/dashboard/penerima', icon: Users },
   { label: 'Program bantuan', href: '/dashboard/bantuan', icon: Layers },
   { label: 'Penyaluran & IPFS', href: '/dashboard/penyaluran', icon: ArrowLeftRight },
-  { label: 'Transaksi ditolak', href: '/dashboard#ditolak', icon: ShieldX, count: '23' },
+  { label: 'Transaksi gagal', href: '/dashboard#transaksi-terbaru', icon: ShieldX, countKey: 'failed' as const },
   { label: 'Laporan', href: '/dashboard/laporan', icon: Download },
 ]
 const monitoring = [
@@ -75,6 +76,13 @@ function DashboardFrame({
   const router = useRouter()
   const logoutMutation = useLogoutMutation()
   const loggingOut = logoutMutation.isPending
+  const summaryQuery = useDashboardSummaryQuery()
+  const networkQuery = useNetworkStatusQuery()
+  const failedCount = summaryQuery.data ? String(summaryQuery.data.failed) : '-'
+  const pendingCount = summaryQuery.data ? String(summaryQuery.data.pending) : '-'
+  const latestBlock = networkQuery.data ? `#${networkQuery.data.latestBlock.toLocaleString('id-ID')}` : '-'
+  const validatorCount = networkQuery.data?.validatorCount ?? null
+  const validatorLabel = validatorCount === null ? '-' : String(validatorCount)
 
   async function logout() {
     if (loggingOut) return
@@ -107,13 +115,13 @@ function DashboardFrame({
           <Link href="/" className={styles.brand}><span className={styles.logoCrop}><img src="/images/bansosledger-logo.png" alt="BansosLedger" width={2145} height={733} /></span></Link>
           <span className={styles.workspace}>WORKSPACE PENGELOLA</span>
           <nav aria-label="Navigasi dashboard">
-            {visibleNavigation.map(item => <Link key={item.href} href={item.href} title={item.label} aria-label={item.label} aria-current={isActive(item.href) ? 'page' : undefined} className={isActive(item.href) ? styles.active : ''} onClick={() => setSidebar(false)}><item.icon size={19} /><span>{item.label}</span>{item.count && <small>{item.count}</small>}</Link>)}
+            {visibleNavigation.map(item => <Link key={item.href} href={item.href} title={item.label} aria-label={item.label} aria-current={isActive(item.href) ? 'page' : undefined} className={isActive(item.href) ? styles.active : ''} onClick={() => setSidebar(false)}><item.icon size={19} /><span>{item.label}</span>{item.countKey && <small>{failedCount}</small>}</Link>)}
           </nav>
           <div className={styles.navSection}>MONITORING</div>
           <nav aria-label="Monitoring dashboard">
             {visibleMonitoring.map(item => <Link key={item.href} href={item.href} title={item.label} aria-label={item.label} aria-current={isActive(item.href) ? 'page' : undefined} className={isActive(item.href) ? styles.active : ''} onClick={() => setSidebar(false)}><item.icon size={19} /><span>{item.label}</span></Link>)}
           </nav>
-          <div className={styles.networkMini}><div><span className={styles.statusDot} />Jaringan Besu</div><p>Block height <strong>#1.482.914</strong></p><p>Validator aktif<strong>4 / 4</strong></p></div>
+          <div className={styles.networkMini}><div><span className={styles.statusDot} />Jaringan Besu</div><p>Block height <strong>{latestBlock}</strong></p><p>Validator aktif<strong>{validatorLabel}</strong></p></div>
           <Link href="/" className={styles.homeLink}>Kembali ke halaman publik <ArrowUpRight size={15} /></Link>
         </aside>
         <div className={styles.mainColumn}>
@@ -122,10 +130,10 @@ function DashboardFrame({
             <button className={`${styles.iconButton} ${styles.mobileToggle}`} aria-label="Buka navigasi" aria-expanded={sidebar} aria-controls="dashboard-sidebar" onClick={() => setSidebar(!sidebar)}><AlignLeft size={18} strokeWidth={1.6} aria-hidden="true" /></button>
             {pathname === '/dashboard' ? <label className={styles.search}><Search size={19} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari nama, hash, atau alasan revert..." aria-label="Cari transaksi" /><kbd>⌕</kbd></label> : <span className={styles.period}>Pengelolaan / {section === 'Program bantuan' ? 'Program Bantuan' : section}</span>}
             <div className={styles.headerRight}>
-              <span className={styles.headerNetwork}><span className={styles.statusDot} />Besu · 4/4 validator</span>
+              <span className={styles.headerNetwork}><span className={styles.statusDot} />Besu · {validatorLabel} validator</span>
               <span className="text-xs">{can('wallet:verify-session') ? (effectiveWalletVerified ? 'Wallet terverifikasi' : 'Wallet belum terverifikasi') : 'Wallet tidak diperlukan'}</span>
               <button disabled={loggingOut} onClick={logout} className="flex shrink-0 items-center gap-1 text-sm" aria-label="Keluar"><LogOut size={17} />{loggingOut ? 'Keluar…' : 'Keluar'}</button>
-              <button className={styles.iconButton} aria-label="Notifikasi" onClick={() => setNotice('Pratinjau notifikasi: 23 transaksi ditolak memerlukan peninjauan operator.')}><Bell size={19} /><i /></button>
+              <button className={styles.iconButton} aria-label="Notifikasi" onClick={() => setNotice(summaryQuery.data ? `Ringkasan: ${pendingCount} transaksi menunggu, ${failedCount} transaksi gagal.` : 'Ringkasan notifikasi belum tersedia.')}><Bell size={19} /><i /></button>
               {previewEnabled && <label className="text-xs">Simulasi UI (non-production)<select id="role-preview" aria-label="Simulasi Pratinjau UI Role" className="block max-w-48 rounded border bg-white p-1 text-black" value={role ?? ''} onChange={event => setPreviewRole?.(event.target.value as Role || null)}><option value="">Belum Login</option>{roles.map(value => <option key={value} value={value}>{ROLE_METADATA[value].shortLabel}</option>)}</select></label>}
               <div className={styles.profile}><span>{meta?.badgeCode ?? '—'}</span><div><strong>{meta?.shortLabel ?? 'Belum Login'}</strong><small>{meta?.instansi ?? 'Sesi belum terverifikasi'}</small></div><ChevronDown size={15} /></div>
             </div>
@@ -140,3 +148,4 @@ function DashboardFrame({
     </SearchContext.Provider>
   )
 }
+

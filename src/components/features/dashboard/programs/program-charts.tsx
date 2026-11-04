@@ -2,19 +2,22 @@
 import { useState } from 'react'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Cell } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
-import { type Program, millions } from '@/mocks/program-data'
+import type { ProgramViewModel } from '@/types'
 import s from '@/components/features/dashboard/programs/programs.module.css'
-export function ProgramCharts({ programs }: { programs: Program[] }) {
+function millionsLabel(value: number): string {
+  return `Rp ${(value / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 1 })} jt`
+}
+export function ProgramCharts({ programs }: { programs: ProgramViewModel[] }) {
   const [quota, setQuota] = useState(false)
   const colors = ['#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#4338ca', '#e0e7ff']
   const data = programs.map((p) => ({
-    name: p.type,
-    used: quota ? p.used : (p.used * p.amount) / 1e6,
-    remaining: quota ? p.quota - p.used : ((p.totalBudget - p.used * p.amount)) / 1e6,
+    name: p.code,
+    used: quota ? p.disbursedCount : p.disbursedAmount / 1e6,
+    remaining: quota ? Math.max(p.enrolledCount - p.disbursedCount, 0) : p.remainingBudget / 1e6,
   }))
   const distribution = Object.entries(
     programs.reduce<Record<string, number>>((a, p) => {
-      a[p.type] = (a[p.type] || 0) + p.totalBudget
+      a[p.kindLabel] = (a[p.kindLabel] || 0) + p.totalBudget
       return a
     }, {}),
   ).map(([name, value]) => ({ name, value }))
@@ -68,7 +71,7 @@ export function ProgramCharts({ programs }: { programs: Program[] }) {
       <section className={s.card}>
         <header>
           <div>
-            <h2>Distribusi Anggaran per Jenis Bantuan</h2>
+            <h2>Distribusi Anggaran per Bentuk Bantuan</h2>
             <p>Proporsi pagu bantuan tunai & barang</p>
           </div>
         </header>
@@ -104,9 +107,9 @@ export function ProgramCharts({ programs }: { programs: Program[] }) {
             <div className={s.inset} key={f}>
               <small>Bantuan {f}</small>
               <strong>
-                {programs.filter((p) => p.form === f).length} Program (
-                {millions(
-                  programs.filter((p) => p.form === f).reduce((a, p) => a + p.totalBudget, 0),
+                {programs.filter((p) => p.kindLabel === f).length} Program (
+                {millionsLabel(
+                  programs.filter((p) => p.kindLabel === f).reduce((a, p) => a + p.totalBudget, 0),
                 )}
                 )
               </strong>

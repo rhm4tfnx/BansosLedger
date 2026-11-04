@@ -1,369 +1,134 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
-import useSWR from 'swr'
-import { initialPrograms, type Program } from '@/mocks/program-data'
-import { programPeriods } from '@/mocks/disbursement-data'
-import { formatPeriod } from '@/lib/utils'
-import { statusIcon, failureReason } from '@/mocks/disbursement-data'
+import { Suspense } from 'react'
+import { Plus, Search } from 'lucide-react'
+import { useRoleAccess } from '@/hooks/use-role-access'
+import { useUrlParams } from '@/hooks/use-url-params'
+import { useDisbursementsQuery } from '@/lib/api/hooks/disbursements'
+import { useProgramsQuery } from '@/lib/api/hooks/programs'
+import type { DisbursementStatus } from '@/lib/api-contract'
 import {
-  Plus,
-  Search,
-  Settings2,
-  Copy,
-  ArrowUpRight,
-  Database,
-  Clock3,
-  CircleCheck,
-  CircleX,
-  FileCheck2,
-} from 'lucide-react'
-import { RecipientDialog } from '@/components/features/dashboard/recipients/recipient-dialog'
-import { DisbursementWizard } from '@/components/features/dashboard/disbursements/disbursement-wizard'
-import { DisbursementDetail } from '@/components/features/dashboard/disbursements/disbursement-detail'
-import {
-  recipients,
-  short,
-  useDisbursements,
-  validWallet,
-  wita,
-  type Distribution,
-  type Status,
-} from '@/mocks/disbursement-data'
-import { masked, money } from '@/mocks/recipient-data'
+  COMING_SOON_TITLE,
+  EmptyState,
+  ErrorState,
+  Pager,
+  TableSkeleton,
+} from '@/components/features/dashboard/shared/states'
+import { HashLink } from '@/components/features/dashboard/shared/hash-link'
+import { DisbursementDetail, StatusBadge } from '@/components/features/dashboard/disbursements/disbursement-detail'
 import s from '@/components/features/dashboard/disbursements/disbursements.module.css'
 
-export function Disbursements() {
-  const { data, update, operator } = useDisbursements()
-  const { data: catalog = initialPrograms } = useSWR<Program[]>('programs-demo', null, { fallbackData: initialPrograms })
-  const programs = catalog.filter(p => !p.deleted).map(p => ({ ...p, baseline: p.used }))
-  const periods = [...new Set([...catalog.flatMap(p => programPeriods(p.startPeriod, p.endPeriod)), ...data.rows.map(r => r.periodId)])].sort((a, b) => a - b)
-  const [status, setStatus] = useState('Semua')
-  const [program, setProgram] = useState('Semua')
-  const [period, setPeriod] = useState('Semua')
-  const [query, setQuery] = useState('')
-  const [wizard, setWizard] = useState<{ scenario?: number; retry?: Distribution } | null>(null)
-  const [detail, setDetail] = useState<string | null>(null)
-  const [simulation, setSimulation] = useState(false)
-  const [revealed, setRevealed] = useState<string[]>([])
-  const [notice, setNotice] = useState('')
-  const input = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        input.current?.focus()
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
-  const rows = data.rows.filter((t) => {
-    const r = recipients.find((r) => r.id === t.recipient)!
-    return (
-      (status === 'Semua' || t.status === status) &&
-      (program === 'Semua' || t.program === program) &&
-      (period === 'Semua' || t.periodId === Number(period)) &&
-      `${t.id} ${r.name} ${r.nik} ${t.cid} ${t.hash ?? ''}`
-        .toLowerCase()
-        .includes(query.toLowerCase())
-    )
+const STATUSES: readonly DisbursementStatus[] = ['DRAFT', 'PENDING', 'SUCCESS', 'FAILED']
+const PAGE_SIZE = 20
+
+function parseStatus(value: string): DisbursementStatus | undefined {
+  return STATUSES.find((status) => status === value)
+}
+
+/** `YYYYMM` URL value to `YYYY-MM` month input value. */
+function periodToInput(value: string): string {
+  return /^\d{6}$/.test(value) ? `${value.slice(0, 4)}-${value.slice(4)}` : ''
+}
+
+function DisbursementsContent() {
+  const { can } = useRoleAccess()
+  const { get, getPage, set } = useUrlParams()
+  const status = parseStatus(get('status'))
+  const programId = get('programId')
+  const periodRaw = get('period')
+  const period = /^\d{6}$/.test(periodRaw) ? Number(periodRaw) : undefined
+  const detailId = get('id')
+  const page = getPage()
+
+  const programs = useProgramsQuery({ limit: 100 })
+  const list = useDisbursementsQuery({
+    page,
+    limit: PAGE_SIZE,
+    sort: get('sort') || '-createdAt',
+    status,
+    programId: programId || undefined,
+    period,
+    enabled: !detailId,
   })
-  const success = data.rows.filter((r) => r.status === 'SUCCESS')
-  const metrics = [
-    {
-      title: 'Penyaluran terealisasi',
-      status: 'SUCCESS',
-      count: success.length,
-      caption: money(success.reduce((a, r) => a + r.amount, 0)),
-      note: 'Memiliki receipt & blok QBFT simulasi',
-      icon: CircleCheck,
-    },
-    {
-      title: 'Menunggu / tertahan',
-      status: 'PENDING',
-      count: data.rows.filter((r) => r.status === 'PENDING').length,
-      caption: 'Fail-safe aktif',
-      note: 'Menunggu pemulihan RPC / tanda tangan',
-      icon: Clock3,
-    },
-    {
-      title: 'Transaksi ditolak / revert',
-      status: 'FAILED',
-      count: data.rows.filter((r) => r.status === 'FAILED').length,
-      caption: 'Rp 0 terealisasi dari transaksi gagal',
-      note: 'Duplikat, nominal, atau wallet tidak sah',
-      icon: CircleX,
-    },
-    {
-      title: 'Bukti terdistribusi',
-      status: '',
-      count: data.rows.filter((r) => r.cid).length,
-      caption: 'Berkas bukti contoh',
-      note: 'CID simulasi · bukan pinning IPFS nyata',
-      icon: FileCheck2,
-    },
-  ]
-  function scenario(n: number) {
-    if (!operator) return
-    update((state) => ({
-      ...state,
-      online: n !== 4,
-      wallet: n === 5 ? '0x0000000000000000000000000000000000000001' : validWallet,
-    }))
-    setSimulation(false)
-    setWizard({ scenario: n })
-  }
-  async function copy(value: string) {
-    try {
-      await navigator.clipboard.writeText(value)
-      setNotice('Hash berhasil disalin.')
-    } catch {
-      setNotice('Gagal menyalin. Silakan salin hash melalui detail.')
-    }
-  }
-  function exportCsv() {
-    const cell = (value: string | number) => `"${String(value).replace(/^[=+@-]/, "'$&").replace(/"/g, '""')}"`
-    const records = [['ID', 'Program', 'Periode', 'PeriodId', 'Penerima', 'NIK tersamar', 'Nominal', 'Status', 'Alasan', 'CID', 'Status bukti'], ...rows.map(row => {
-      const recipient = recipients.find(r => r.id === row.recipient)
-      return [row.id, row.program, formatPeriod(row.periodId), row.periodId, recipient?.name ?? '', recipient ? masked(recipient.nik) : '', row.amount, row.status, row.status === 'FAILED' ? failureReason(row.reason) : row.reason, row.cid, row.evidenceWithdrawn ? 'DITARIK' : row.cid ? 'TERSEDIA' : 'MENUNGGU']
-    })]
-    const url = URL.createObjectURL(new Blob(['\ufeff' + records.map(record => record.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }))
-    const link = document.createElement('a'); link.href = url; link.download = 'penyaluran-bulanan.csv'; link.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-  }
-  function recheck(row: Distribution) {
-    if (!operator) return
-    const message = !data.online
-      ? 'RPC offline: receipt belum dapat diperiksa.'
-      : row.status === 'FAILED'
-        ? 'Receipt simulasi: transaksi reverted. Periksa alasan gagal sebelum mengirim ulang.'
-        : 'Belum ada receipt. Gunakan Kirim Ulang untuk meminta tanda tangan; status tidak diubah otomatis.'
-    setNotice(`${row.id}: ${message}`)
-    update((state) => ({ ...state, logs: [`Cek ulang ${row.id}: ${message}`, ...state.logs] }))
-  }
-  const selected = data.rows.find((r) => r.id === detail)
+
   return (
-    <>
-      <div className={s.page}>
-        <div className={s.heading}>
-          <div>
-            <small className={s.accent}>Operasional Bansos / Penyaluran & IPFS</small>
-            <h1>Pencatatan Penyaluran Bantuan Sosial</h1>
-            <p>Bukti terdistribusi & pencatatan transparan · MongoDB → IPFS → Hyperledger Besu</p>
-          </div>
-          <div className={s.tabs} role="group" aria-label="Tampilan penyaluran">
-            <button
-              className={!detail ? s.selected : ''}
-              aria-pressed={!detail}
-              onClick={() => setDetail(null)}
-            >
-              Daftar & pencatatan penyaluran
-            </button>
-            <button
-              className={detail ? s.selected : ''}
-              aria-pressed={!!detail}
-              disabled={!data.rows.length}
-              onClick={() =>
-                setDetail(
-                  data.rows.find((r) => r.status === 'SUCCESS')?.id ?? data.rows[0]?.id ?? null,
-                )
-              }
-            >
-              Explorer & verifikasi
-            </button>
-          </div>
+    <div className={s.page}>
+      <div className={s.heading}>
+        <div>
+          <small className={s.accent}>Operasional Bansos / Penyaluran &amp; IPFS</small>
+          <h1>Pencatatan Penyaluran Bantuan Sosial</h1>
+          <p>Bukti terdistribusi &amp; pencatatan transparan · MongoDB → IPFS → Hyperledger Besu</p>
         </div>
-        {selected ? (
-          <DisbursementDetail
-            key={selected.id}
-            row={selected}
-            onSelect={setDetail}
-            onBack={() => setDetail(null)}
-          />
-        ) : (
-          <>
-            <div className={s.card}>
-              <div className={s.row}>
-                <label className={s.search}>
-                  <Search size={17} />
-                  <input
-                    ref={input}
-                    style={{ width: '100%' }}
-                    placeholder="Cari ID, nama/NIK, CID, atau TxHash…"
-                    aria-label="Pencarian penyaluran"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                  <kbd>⌘K</kbd>
-                </label>
-                <button onClick={exportCsv}>Ekspor penyaluran (CSV)</button>
+      </div>
+      {detailId ? (
+        <DisbursementDetail key={detailId} id={detailId} onBack={() => set({ id: null }, false)} />
+      ) : (
+        <section className={s.tableCard}>
+          <div className={s.toolbar}>
+            <div className={s.row}>
+              <div className={s.tabs} role="group" aria-label="Filter status">
+                <button aria-pressed={!status} className={!status ? s.selected : ''} onClick={() => set({ status: null })}>
+                  Semua
+                </button>
+                {STATUSES.map((x) => (
+                  <button
+                    key={x}
+                    aria-pressed={status === x}
+                    className={status === x ? s.selected : ''}
+                    onClick={() => set({ status: x })}
+                  >
+                    {x}
+                  </button>
+                ))}
               </div>
-              <div className={s.row} style={{ marginTop: 14 }}>
-                <small>
-                  Wallet Aplikasi Kelurahan <code>{short(data.wallet)}</code> · RPC 8545{' '}
-                  <b>{data.online ? 'Online' : 'Offline'}</b>
-                </small>
-                <small>Konsensus QBFT: ambang 3/4 · 4 validator simulasi aktif</small>
-              </div>
+              {can('disbursement:create') && (
+                <div className={s.actions}>
+                  <button className={s.primary} disabled title={COMING_SOON_TITLE}>
+                    <Plus size={16} /> Catat penyaluran baru
+                  </button>
+                </div>
+              )}
             </div>
-            {notice && (
-              <div role="status" className={s.banner}>
-                {notice} <button onClick={() => setNotice('')}>Tutup</button>
-              </div>
-            )}
-            <div className={s.grid}>
-              <section className={s.card}>
-                <div className={s.row}>
-                  <h2>Statistik eksekusi penyaluran</h2>
-                  <small>Periode 2026</small>
-                </div>
-                <p>Ringkasan status off-chain, bukti IPFS, dan transaksi.</p>
-                <div className={s.grid} style={{ marginTop: 20 }}>
-                  {metrics.map((m) => (
-                    <div
-                      key={m.title}
-                      className={`${s.metric} ${m.status ? s[m.status] : s.banner}`}
-                    >
-                      <div className={s.row}>
-                        <b>{m.title}</b>
-                        <m.icon size={20} />
-                      </div>
-                      <strong>{m.count}</strong>
-                      <b>{m.caption}</b>
-                      <small>{m.note}</small>
-                    </div>
-                  ))}
-                </div>
-              </section>
-              <section className={s.card}>
-                <div className={s.row}>
-                  <h2>Alur 3 fase & realisasi program</h2>
-                  {operator && (
-                    <button onClick={() => setWizard({})}>
-                      Lihat 7 langkah <ArrowUpRight size={14} />
-                    </button>
-                  )}
-                </div>
-                <p>Arsitektur hibrida off-chain, IPFS, dan smart contract.</p>
-                <div className={s.three} style={{ marginTop: 20 }}>
-                  {['MongoDB Off-Chain', 'Pinata / IPFS CID', 'MetaMask & QBFT'].map((x, i) => (
-                    <div key={x} className={s.phase}>
-                      <small className={s.accent}>FASE {i + 1}</small>
-                      <strong>{x}</strong>
-                      <small>
-                        {
-                          [
-                            'Simpan PENDING & terbitkan Data_ID',
-                            'Unggah bukti JPG/PDF & peroleh CID',
-                            'Pre-flight, tanda tangan & konsensus',
-                          ][i]
-                        }
-                      </small>
-                    </div>
-                  ))}
-                </div>
-                <div className={s.quota}>
-                  <h3>Realisasi kuota & pagu program</h3>
-                  <div className={s.grid}>
-                    {programs.map((p) => {
-                      const n = p.baseline + success.filter((r) => r.program === p.code).length
-                      return (
-                        <div className={s.phase} key={p.code}>
-                          <div className={s.row}>
-                            <b>{p.code}</b>
-                            <small>{money(p.amount)} / KPM</small>
-                          </div>
-                          <progress max={p.quota} value={n} aria-label={`Realisasi ${p.code}`} />
-                          <div className={s.row}>
-                            <small>
-                              {n}/{p.quota} KPM
-                            </small>
-                            <b>{Math.round((n / p.quota) * 100)}%</b>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <p>
-                    <small>
-                      Baseline contoh periode berjalan; hanya SUCCESS menambah realisasi.
-                    </small>
-                  </p>
-                </div>
-              </section>
-            </div>
-            <section className={s.tableCard}>
-              <div className={s.toolbar}>
-                <div className={s.row}>
-                  <div className={s.tabs} role="group" aria-label="Filter status">
-                    {['Semua', 'SUCCESS', 'PENDING', 'FAILED'].map((x) => (
-                      <button
-                        key={x}
-                        aria-pressed={status === x}
-                        className={status === x ? s.selected : ''}
-                        onClick={() => setStatus(x)}
-                      >
-                        {x} (
-                        {x === 'Semua'
-                          ? data.rows.length
-                          : data.rows.filter((r) => r.status === x).length}
-                        )
-                      </button>
+            <div className={s.row}>
+              <div className={s.actions}>
+                <label>
+                  Program
+                  <select value={programId} onChange={(e) => set({ programId: e.target.value })}>
+                    <option value="">Semua program</option>
+                    {(programs.data?.items ?? []).map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.code}
+                      </option>
                     ))}
-                  </div>
-                  {operator && (
-                    <div className={s.actions}>
-                      <button onClick={() => setSimulation(true)}>
-                        <Settings2 size={15} /> Simulasi pengujian
-                      </button>
-                      <button className={s.primary} onClick={() => setWizard({})}>
-                        <Plus size={16} /> Catat penyaluran baru
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className={s.row}>
-                  <div className={s.actions}>
-                    <label>
-                      Program
-                      <select value={program} onChange={(e) => setProgram(e.target.value)}>
-                        <option value="Semua">Semua program</option>
-                        {programs.map((p) => (
-                          <option key={p.code}>{p.code}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Periode
-                      <select value={period} onChange={(e) => setPeriod(e.target.value)}>
-                        <option value="Semua">Semua periode</option>
-                        {periods.map((p) => (
-                          <option key={p} value={p}>{formatPeriod(p)}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <button
-                      onClick={() => {
-                        setStatus('Semua')
-                        setProgram('Semua')
-                        setPeriod('Semua')
-                        setQuery('')
-                      }}
-                    >
-                      Reset filter
-                    </button>
-                  </div>
-                  <small>Menampilkan {rows.length} transaksi</small>
-                </div>
+                  </select>
+                </label>
+                <label>
+                  Periode
+                  <input
+                    type="month"
+                    value={periodToInput(periodRaw)}
+                    onChange={(e) => set({ period: e.target.value.replace('-', '') })}
+                  />
+                </label>
+                <button onClick={() => set({ status: null, programId: null, period: null })}>Reset filter</button>
               </div>
+              {list.data && <small>Menampilkan {list.data.items.length} dari {list.data.total} transaksi</small>}
+            </div>
+          </div>
+          {list.isPending ? (
+            <TableSkeleton rows={8} label="Memuat daftar penyaluran" />
+          ) : list.isError ? (
+            <ErrorState error={list.error} onRetry={() => void list.refetch()} />
+          ) : list.data.items.length === 0 ? (
+            <EmptyState>Tidak ada penyaluran yang sesuai filter.</EmptyState>
+          ) : (
+            <>
               <div className={s.scroll}>
                 <table className={s.table}>
                   <thead>
                     <tr>
                       {[
                         'ID & waktu (WITA)',
-                        'Penerima & hash komitmen',
+                        'Penerima',
                         'Program, periode & nominal',
                         'Bukti IPFS',
                         'Status eksekusi',
@@ -375,88 +140,51 @@ export function Disbursements() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((t) => {
-                      const r = recipients.find((r) => r.id === t.recipient)!
+                    {list.data.items.map((t) => {
+                      const withdrawn = t.evidence.some((e) => e.isWithdrawn)
+                      const active = t.activeEvidenceCount
                       return (
                         <tr key={t.id}>
                           <td>
-                            <strong>{t.id}</strong>
-                            <small>_id: sim-{t.id.slice(-3)}</small>
-                            <small>{wita(t.date)}</small>
+                            <strong title={t.refId}>{t.refIdShort}</strong>
+                            <small>{t.createdAtWita}</small>
                           </td>
                           <td>
-                            <strong>{r.name}</strong>
-                            <small>
-                              NIK: {operator && revealed.includes(t.id) ? r.nik : masked(r.nik)}
-                            </small>
-                            {operator && (
-                              <button
-                                onClick={() => {
-                                  setRevealed((v) =>
-                                    v.includes(t.id) ? v.filter((x) => x !== t.id) : [...v, t.id],
-                                  )
-                                  update((state) => ({
-                                    ...state,
-                                    logs: [
-                                      `${revealed.includes(t.id) ? 'Tutup' : 'Buka'} masking NIK ${t.id} · Operator · ${wita(new Date().toISOString())}`,
-                                      ...state.logs,
-                                    ],
-                                  }))
-                                }}
-                              >
-                                {revealed.includes(t.id) ? 'Tutup' : 'Buka'} NIK
-                              </button>
-                            )}
-                            <small>{r.region}</small>
-                            <code>{short(r.identityHash ?? 'Belum FINAL')}</code>
+                            <strong>{t.recipientName}</strong>
+                            <small>NIK: {t.recipientNikMasked}</small>
                           </td>
                           <td>
-                            <span className={`${s.badge} ${s.banner}`}>{t.program}</span>
-                            <small>{formatPeriod(t.periodId)}</small>
-                            <b>{money(t.amount)}</b>
+                            <span className={`${s.badge} ${s.banner}`} title={t.programName}>{t.programCode}</span>
+                            <small>{t.periodLabel}</small>
+                            <b>{t.amountFormatted}</b>
                           </td>
                           <td>
-                            <code>{short(t.cid) || 'Menunggu bukti'}</code>
-                            <button disabled={!t.cid} onClick={() => setDetail(t.id)}>
-                              Pratinjau bukti
-                            </button>
-                            <small>{t.evidenceWithdrawn ? 'DITARIK · Simulasi' : 'Simulasi'}</small>
+                            <small>{active > 0 ? `${active} berkas tersedia` : 'Menunggu bukti'}</small>
+                            {withdrawn && <small>DITARIK</small>}
                           </td>
                           <td>
-<span className={`${s.badge} ${s[t.status]}`} aria-live="polite">{statusIcon[t.status]} {t.status}</span>
-                        <p>{t.status === 'FAILED' ? failureReason(t.reason) : t.reason}</p>
-                            {t.block && <small>Blok #{t.block}</small>}
+                            <StatusBadge status={t.status} />
+                            {t.status === 'FAILED' && t.lastErrorMessage && <p>{t.lastErrorMessage}</p>}
                           </td>
                           <td>
-                            {t.hash ? (
-                              <>
-                                <Link href={`/explorer/tx/${t.hash}`}>
-                                  <code>{short(t.hash)}</code>
-                                </Link>
-                                <button
-                                  aria-label={`Salin hash ${t.id}`}
-                                  onClick={() => copy(t.hash!)}
-                                >
-                                  <Copy size={12} />
-                                </button>
-                              </>
+                            {t.chain?.txHash ? (
+                              <HashLink hash={t.chain.txHash} short={t.chain.txHashShort} />
                             ) : (
                               <small>Belum terekam pada blok</small>
                             )}
                           </td>
                           <td>
-                            <button onClick={() => setDetail(t.id)}>
-                              <Search size={12} /> Detail & verifikasi
+                            <button onClick={() => set({ id: t.id }, false)}>
+                              <Search size={12} /> Detail &amp; verifikasi
                             </button>
-                            {operator && t.status !== 'SUCCESS' && (
+                            {can('transaction:sign') && t.status !== 'SUCCESS' && (
                               <div className={s.actions}>
-                                <button onClick={() => recheck(t)}>Cek ulang status</button>
-                                <button
-                                  className={s.primary}
-                                  onClick={() => setWizard({ retry: t })}
-                                >
-                                  {t.cid ? 'Kirim ulang' : 'Lanjutkan bukti'}
+                                <button className={s.primary} disabled title={COMING_SOON_TITLE}>
+                                  {t.status === 'DRAFT' ? 'Konfirmasi' : 'Kirim ulang'}
                                 </button>
+                                {t.status === 'DRAFT' && (
+                                  <button disabled title={COMING_SOON_TITLE}>Hapus draf</button>
+                                )}
                               </div>
                             )}
                           </td>
@@ -465,94 +193,25 @@ export function Disbursements() {
                     })}
                   </tbody>
                 </table>
-                {!rows.length && (
-                  <p className={s.empty}>Tidak ada penyaluran yang sesuai filter.</p>
-                )}
               </div>
-            </section>
-            <div className={s.grid}>
-              <section className={s.card} id="jaringan">
-                <h2>
-                  <Database size={16} style={{ display: 'inline' }} /> Konsensus institusional QBFT
-                </h2>
-                {['Kel. Takkalasi', 'Kec. Balusu', 'Dinsos Kab. Barru', 'Auditor / Pengawas'].map(
-                  (v, i) => (
-                    <p className={s.row} key={v}>
-                      <span>
-                        Validator {i + 1} · {v}
-                      </span>
-                      <span className={s.SUCCESS}>Aktif (simulasi)</span>
-                    </p>
-                  ),
-                )}
-                <small>
-                  Minimal 3 dari 4 validator · N=4, f=1. Wallet operator terpisah dari validator
-                  key.
-                </small>
-              </section>
-            </div>
-          </>
-        )}
-        {wizard && operator && (
-          <DisbursementWizard
-            scenario={wizard.scenario}
-            retry={wizard.retry}
-            onClose={() => setWizard(null)}
-          />
-        )}
+              <Pager
+                page={list.data.page}
+                totalPages={list.data.totalPages}
+                total={list.data.total}
+                onPage={(next) => set({ page: next }, false)}
+              />
+            </>
+          )}
+        </section>
+      )}
+    </div>
+  )
+}
 
-        {simulation && operator && (
-          <RecipientDialog
-            title="Simulasi Pengujian Skenario"
-            subtitle="Black-box · Tabel 3.3 · Seluruh hasil merupakan simulasi frontend."
-            onClose={() => setSimulation(false)}
-          >
-            <div className={`${s.page} ${s.body}`}>
-              <div className={s.card}>
-                <h2>Kontrol jaringan & wallet</h2>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={data.online}
-                    onChange={(e) => update((state) => ({ ...state, online: e.target.checked }))}
-                  />
-                  RPC 8545 online
-                </label>
-                <p>Putuskan koneksi untuk menguji fail-safe PENDING.</p>
-                <label>
-                  Wallet
-                  <select
-                    value={data.wallet}
-                    onChange={(e) => update((state) => ({ ...state, wallet: e.target.value }))}
-                  >
-                    <option value={validWallet}>Wallet Kelurahan (sah)</option>
-                    <option value="0x0000000000000000000000000000000000000001">
-                      Wallet tidak sah
-                    </option>
-                  </select>
-                </label>
-              </div>
-              <h2>Jalankan skenario di wizard</h2>
-              {[
-                'Penyaluran normal — SUCCESS',
-                'Duplikasi periode — pilih penerima pertama, BLT Januari 2026',
-                'Manipulasi nominal — Rp 500.000 bukan Rp 900.000',
-                'Gangguan RPC — PENDING & pemulihan',
-                'Wallet tidak sah / penerima belum FINAL — FAILED',
-              ].map((x, i) => (
-                <button className={s.choice} key={x} onClick={() => scenario(i + 1)}>
-                  <b>Skenario {i + 1}</b>
-                  <span>{x}</span>
-                </button>
-              ))}
-              <p>
-                Untuk uji keutuhan data, buka detail transaksi SUCCESS lalu pilih Simulasikan
-                manipulasi MongoDB dan Verifikasi di blockchain.
-              </p>
-            </div>
-          </RecipientDialog>
-        )}
-      </div>
-    </>
+export function Disbursements() {
+  return (
+    <Suspense fallback={<TableSkeleton rows={8} />}>
+      <DisbursementsContent />
+    </Suspense>
   )
 }

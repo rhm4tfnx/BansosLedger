@@ -1,22 +1,19 @@
 'use client'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
-import { type Recap, programs, percent } from '@/mocks/report-data'
+import type { ProgramSummaryMetricsViewModel } from '@/types'
 import s from '@/components/features/dashboard/reports/reports.module.css'
-export function ReportCharts({ rows }: { rows: Recap[] }) {
-  const total = rows.reduce((sum, r) => sum + r.realized, 0)
-  const slices = programs
-    .map((name, i) => ({
-      name,
-      value: rows.filter((r) => r.program === name).reduce((sum, r) => sum + r.realized, 0),
-      fill: `var(--chart-${i + 1})`,
-    }))
-    .filter((r) => r.value)
+
+export function ReportCharts({ summary }: { summary: ProgramSummaryMetricsViewModel }) {
+  const slices = [
+    { name: 'Realisasi', value: summary.realisasiRupiah, fill: 'var(--chart-1)' },
+    { name: 'Sisa pagu', value: Math.max(summary.sisa, 0), fill: 'var(--chart-4)' },
+  ].filter((r) => r.value > 0)
   return (
     <div className={s.chartGrid}>
       <div className={s.inset}>
-        <h3>Komparasi pagu & realisasi</h3>
-        <p>Per program dan wilayah · dalam juta rupiah</p>
+        <h3>Komparasi pagu &amp; realisasi</h3>
+        <p>Cakupan filter aktif · dalam juta rupiah</p>
         <ChartContainer
           className="h-64 w-full aspect-auto"
           config={{
@@ -26,11 +23,13 @@ export function ReportCharts({ rows }: { rows: Recap[] }) {
         >
           <BarChart
             accessibilityLayer
-            data={rows.map((r) => ({
-              label: `${r.program} / ${r.area.slice(0, 6)}`,
-              budget: r.budget / 1e6,
-              realized: r.realized / 1e6,
-            }))}
+            data={[
+              {
+                label: 'Total',
+                budget: summary.pagu / 1e6,
+                realized: summary.realisasiRupiah / 1e6,
+              },
+            ]}
           >
             <CartesianGrid vertical={false} />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
@@ -46,32 +45,23 @@ export function ReportCharts({ rows }: { rows: Recap[] }) {
         </div>
       </div>
       <div className={s.inset}>
-        <h3>Distribusi dana tersalurkan</h3>
-        <p>Proporsi realisasi per program</p>
+        <h3>Proporsi realisasi</h3>
+        <p>Realisasi terhadap sisa pagu</p>
         <ChartContainer
           className="h-52 w-full aspect-auto"
-          config={Object.fromEntries(
-            programs.map((p, i) => [p, { label: p, color: `var(--chart-${i + 1})` }]),
-          )}
+          config={{
+            Realisasi: { label: 'Realisasi', color: 'var(--chart-1)' },
+            'Sisa pagu': { label: 'Sisa pagu', color: 'var(--chart-4)' },
+          }}
         >
           <PieChart>
-            <Pie
-              data={slices}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={55}
-              outerRadius={80}
-              strokeWidth={3}
-            />
+            <Pie data={slices} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80} strokeWidth={3} />
             <ChartTooltip content={<ChartTooltipContent />} />
           </PieChart>
         </ChartContainer>
         <div className={s.legend}>
-          {slices.map((r) => (
-            <span key={r.name}>
-              {r.name} <strong>{percent(total ? (r.value / total) * 100 : 0)}</strong>
-            </span>
-          ))}
+          <span>Realisasi <strong>{summary.percentage}%</strong></span>
+          <span>Sisa <strong>{summary.sisaFormatted}</strong></span>
         </div>
       </div>
     </div>
