@@ -4,8 +4,15 @@ import { NextResponse } from 'next/server'
 import { hasPermission } from '@/lib/rbac'
 import { connectDatabase } from '@/lib/db/connection'
 import { backendError } from '@/lib/service-error'
+import { getErrorInfo } from '@/lib/api-contract/errors'
 import { getVerifiedServerSession } from './session'
 import type { Permission } from '@/types/rbac'
+
+const REQUEST_ID_REGEX = /^[A-Za-z0-9-]{8,64}$/
+
+export function sanitizeRequestId(candidate?: string | null): string {
+  return candidate && REQUEST_ID_REGEX.test(candidate) ? candidate : randomUUID()
+}
 
 const fallbackCodes: Record<number, string> = {
   400: 'INVALID_INPUT',
@@ -18,22 +25,23 @@ const fallbackCodes: Record<number, string> = {
   503: 'SERVICE_UNAVAILABLE',
 }
 
-export function problem(status: number, code: string, message: string, requestId?: string) {
-  const reqId = requestId || randomUUID()
+export function problem(status: number, code: string, message?: string, requestId?: string) {
+  const reqId = sanitizeRequestId(requestId)
+  const resolvedMessage = message || getErrorInfo(code).message
   return NextResponse.json(
-    { type: `urn:bansos:error:${code}`, title: message, status, code, message, requestId: reqId },
+    { type: `urn:bansos:error:${code}`, title: resolvedMessage, status, code, message: resolvedMessage, requestId: reqId },
     { status, headers: { 'Content-Type': 'application/problem+json', 'Cache-Control': 'no-store', 'X-Request-Id': reqId } }
   )
 }
 
 export async function asV1(handler: (request: Request) => Promise<Response>, request: Request) {
-  const reqId = request.headers.get('x-request-id') || randomUUID()
+  const reqId = sanitizeRequestId(request.headers.get('x-request-id'))
   let response: Response
   try { response = await handler(request) } catch (error) { response = backendError(error) }
   if (response.ok) return response
   const data = await response.json().catch(() => ({}))
-  const code = data.code || data.error || fallbackCodes[response.status] || 'UNKNOWN'
-  const message = data.message || data.title || data.error || 'Permintaan ditolak.'
+  const code = (typeof data.code === 'string' && data.code) || fallbackCodes[response.status] || 'UNKNOWN'
+  const message = (typeof data.message === 'string' && data.message) || (typeof data.title === 'string' && data.title) || getErrorInfo(code).message
   const result = problem(response.status, code, message, reqId)
   const retry = response.headers.get('retry-after'); if (retry) result.headers.set('Retry-After', retry)
   return result

@@ -313,3 +313,219 @@ export const problemDtoSchema = z.object({
   requestId: z.string(),
 }).strict()
 export type ProblemDto = z.infer<typeof problemDtoSchema>
+
+// 15. SafeEventDto
+export const safeEventDtoSchema = z.object({
+  refId: z.string(),
+  programId: z.string(),
+  period: z.number().int(),
+  amount: z.string(),
+  commitment: z.string(),
+  cid: z.string(),
+  gatewayUrl: z.string().nullable(),
+  recordedBy: z.string(),
+  utc: z.string().nullable(),
+  wita: z.string().nullable(),
+}).strict()
+export type SafeEventDto = z.infer<typeof safeEventDtoSchema>
+
+// 16. ExplorerBlockDto & List
+export const explorerBlockDtoSchema = z.object({
+  number: z.number().int().nonnegative(),
+  hash: z.string(),
+  parentHash: z.string(),
+  timestamp: z.number().int(),
+  proposer: z.string(),
+  transactionCount: z.number().int().nonnegative(),
+}).strict()
+export type ExplorerBlockDto = z.infer<typeof explorerBlockDtoSchema>
+
+export const explorerBlockListDtoSchema = z.object({
+  data: z.array(explorerBlockDtoSchema),
+  page: z.number().int().positive(),
+  limit: z.number().int().positive(),
+  total: z.number().int().nonnegative(),
+}).strict()
+export type ExplorerBlockListDto = z.infer<typeof explorerBlockListDtoSchema>
+
+// 17. ExplorerTxDto
+export const explorerTxDtoSchema = z.object({
+  txHash: z.string(),
+  from: z.string(),
+  to: z.string(),
+  blockNumber: z.number().int().nonnegative(),
+  status: z.enum(['SUCCESS', 'REVERTED']),
+  utc: z.string(),
+  events: z.array(safeEventDtoSchema),
+}).strict()
+export type ExplorerTxDto = z.infer<typeof explorerTxDtoSchema>
+
+// 18. ExplorerAddressDto
+export const explorerAddressEventDtoSchema = safeEventDtoSchema.extend({
+  txHash: z.string(),
+}).strict()
+export type ExplorerAddressEventDto = z.infer<typeof explorerAddressEventDtoSchema>
+
+export const explorerAddressDtoSchema = z.object({
+  address: z.string(),
+  data: z.array(explorerAddressEventDtoSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  limit: z.number().int().positive(),
+}).strict()
+export type ExplorerAddressDto = z.infer<typeof explorerAddressDtoSchema>
+
+// 19. ExplorerContractDto
+export const explorerContractDtoSchema = z.object({
+  address: z.string(),
+  authorizedWallet: z.string().nullable(),
+  owner: z.string().nullable(),
+  paused: z.boolean().nullable(),
+  chainId: z.number().int().nullable(),
+  networkOk: z.boolean().nullable(),
+  abi: z.array(z.unknown()),
+}).strict()
+export type ExplorerContractDto = z.infer<typeof explorerContractDtoSchema>
+
+// 20. ExplorerValidatorsDto
+export const explorerValidatorsDtoSchema = z.object({
+  data: z.array(z.object({
+    address: z.string(),
+    institution: z.string().nullable(),
+  }).strict()),
+  count: z.number().int().nullable(),
+}).strict()
+export type ExplorerValidatorsDto = z.infer<typeof explorerValidatorsDtoSchema>
+
+// 21. ExplorerSearchDto
+export const explorerSearchEventsDtoSchema = z.object({
+  data: z.array(explorerAddressEventDtoSchema),
+  limit: z.number().int(),
+}).strict()
+export type ExplorerSearchEventsDto = z.infer<typeof explorerSearchEventsDtoSchema>
+
+export const explorerSearchDtoSchema = z.union([
+  explorerBlockDtoSchema,
+  explorerAddressDtoSchema,
+  explorerTxDtoSchema,
+  explorerSearchEventsDtoSchema,
+])
+export type ExplorerSearchDto = z.infer<typeof explorerSearchDtoSchema>
+
+// 22. PublicSummaryDto
+export const publicSummaryDtoSchema = z.object({
+  programs: z.number().int().nonnegative(),
+  budget: z.number().int().nonnegative(),
+  transactions: z.number().int().nonnegative(),
+  amount: z.number().int().nonnegative(),
+}).strict()
+export type PublicSummaryDto = z.infer<typeof publicSummaryDtoSchema>
+
+// 23. PublicProgramDto & Detail
+export const publicProgramDtoSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  kind: z.string(),
+  fundSource: z.string(),
+  amountPerRecipient: z.number().int().nonnegative(),
+  totalBudget: z.number().int().nonnegative(),
+  startPeriod: z.number().int(),
+  endPeriod: z.number().int(),
+  status: z.string(),
+}).strict()
+export type PublicProgramDto = z.infer<typeof publicProgramDtoSchema>
+
+export const publicLedgerItemDtoSchema = z.object({
+  txHash: z.string().nullable(),
+  period: z.number().int(),
+  amount: z.number().int().nonnegative(),
+  time: z.string().nullable(),
+}).strict()
+export type PublicLedgerItemDto = z.infer<typeof publicLedgerItemDtoSchema>
+
+export const publicProgramDetailDtoSchema = z.object({
+  program: publicProgramDtoSchema,
+  ledger: listEnvelope(publicLedgerItemDtoSchema),
+}).strict()
+export type PublicProgramDetailDto = z.infer<typeof publicProgramDetailDtoSchema>
+
+// 24. PublicStatusCheckDto
+export const statusCheckEntryDtoSchema = z.object({
+  program: z.object({
+    code: z.string().optional(),
+    name: z.string().nullable().optional(),
+  }),
+  period: z.number().int(),
+  status: z.string(),
+  txHash: z.string().nullable().optional(),
+}).strict()
+export type StatusCheckEntryDto = z.infer<typeof statusCheckEntryDtoSchema>
+
+export const publicStatusCheckDtoSchema = z.discriminatedUnion('found', [
+  z.object({
+    found: z.literal(false),
+  }).strict(),
+  z.object({
+    found: z.literal(true),
+    name: z.string(),
+    entries: z.array(statusCheckEntryDtoSchema),
+  }).strict(),
+])
+export type PublicStatusCheckDto = z.infer<typeof publicStatusCheckDtoSchema>
+
+// 25. Auth & Action DTOs
+export const loginResultDtoSchema = z.object({
+  authenticated: z.literal(true),
+  userId: z.string(),
+  role: z.string(),
+  walletVerificationRequired: z.boolean(),
+  redirectTo: z.string(),
+  mustChangePassword: z.boolean().optional(),
+}).strict()
+export type LoginResultDto = z.infer<typeof loginResultDtoSchema>
+
+export const logoutResultDtoSchema = z.object({
+  loggedOut: z.literal(true),
+  redirectTo: z.string(),
+}).strict()
+export type LogoutResultDto = z.infer<typeof logoutResultDtoSchema>
+
+export const changePasswordResultDtoSchema = z.object({
+  changed: z.literal(true),
+  mustChangePassword: z.literal(false),
+}).strict()
+export type ChangePasswordResultDto = z.infer<typeof changePasswordResultDtoSchema>
+
+export const mfaVerifyResultDtoSchema = z.object({
+  verified: z.literal(true),
+}).strict()
+export type MfaVerifyResultDto = z.infer<typeof mfaVerifyResultDtoSchema>
+
+export const walletNonceDtoSchema = z.object({
+  message: z.string(),
+}).strict()
+export type WalletNonceDto = z.infer<typeof walletNonceDtoSchema>
+
+export const walletBindDtoSchema = z.object({
+  verified: z.literal(true),
+}).strict()
+export type WalletBindDto = z.infer<typeof walletBindDtoSchema>
+
+export const cronReconcileDtoSchema = z.union([
+  z.object({
+    indexed: z.number().int().nonnegative(),
+    processed: z.number().int().nonnegative(),
+    failures: z.number().int().nonnegative(),
+  }).strict(),
+  z.object({
+    status: z.literal('busy'),
+  }).strict(),
+])
+export type CronReconcileDto = z.infer<typeof cronReconcileDtoSchema>
+
+export const withdrawEvidenceDtoSchema = z.object({
+  status: z.literal('WITHDRAWN'),
+  message: z.string().optional(),
+}).strict()
+export type WithdrawEvidenceDto = z.infer<typeof withdrawEvidenceDtoSchema>

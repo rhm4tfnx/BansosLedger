@@ -1,11 +1,25 @@
 import { describe, expect, test } from 'vitest'
 import { toRecipientDto } from '@/modules/recipients/dto'
 import { toProgramDto, toEnrollmentDto } from '@/modules/programs/dto'
-import { toDisbursementDto, toEvidenceDto, toAttemptDto } from '@/modules/disbursements/dto'
+import { toDisbursementDto, toEvidenceDto, toAttemptDto, toWithdrawEvidenceDto } from '@/modules/disbursements/dto'
 import { toAuditLogDto } from '@/modules/audit/dto'
 import { toRealizationReportDto, toDashboardSummaryDto, toWalletStatusDto } from '@/modules/reports/dto'
 import { toReconciliationDto, toNetworkStatusDto } from '@/modules/chain/dto'
 import { toAuthMeDto } from '@/modules/auth/dto'
+import {
+  toExplorerBlockDto,
+  toExplorerBlockListDto,
+  toExplorerTxDto,
+  toExplorerAddressDto,
+  toExplorerContractDto,
+  toExplorerValidatorsDto,
+} from '@/modules/explorer/dto'
+import {
+  toPublicSummaryDto,
+  toPublicProgramDto,
+  toPublicProgramDetailDto,
+  toPublicStatusCheckDto,
+} from '@/modules/public/dto'
 import {
   recipientDtoSchema,
   programDtoSchema,
@@ -408,6 +422,132 @@ describe('DTO Mappers - Security & Structure', () => {
     expect(dto.boundWalletAddress).toBe('0x' + '4'.repeat(40))
     expect(typeof dto.expiresAt).toBe('number')
     expect(authMeDtoSchema.parse(dto)).toEqual(dto)
+  })
+
+  test('Explorer and Public DTO mappers exclude all forbidden internal and private keys', () => {
+    // Explorer block
+    const blockDto = toExplorerBlockDto({
+      ...dirtyFields,
+      number: 10,
+      hash: '0x' + 'b'.repeat(64),
+      parentHash: '0x' + 'c'.repeat(64),
+      timestamp: 1700000000,
+      proposer: '0x' + '1'.repeat(40),
+      transactionCount: 2,
+    })
+    assertNoForbiddenKeys(blockDto)
+    expect(blockDto.number).toBe(10)
+
+    // Explorer tx
+    const txDto = toExplorerTxDto({
+      ...dirtyFields,
+      txHash: '0x' + 'a'.repeat(64),
+      from: '0x' + '1'.repeat(40),
+      to: '0x' + '2'.repeat(40),
+      blockNumber: 10,
+      status: 'SUCCESS',
+      utc: new Date().toISOString(),
+      events: [{
+        ...dirtyFields,
+        refId: '0x' + '1'.repeat(64),
+        programId: '0x' + '2'.repeat(64),
+        period: 202601,
+        amount: '300000',
+        commitment: '0x' + '3'.repeat(64),
+        cid: 'bafy' + 'a'.repeat(50),
+        recordedBy: '0x' + '1'.repeat(40),
+      }],
+    })
+    assertNoForbiddenKeys(txDto)
+    expect(txDto.status).toBe('SUCCESS')
+
+    // Explorer address
+    const addrDto = toExplorerAddressDto({
+      ...dirtyFields,
+      address: '0x' + '1'.repeat(40),
+      data: [{
+        ...dirtyFields,
+        txHash: '0x' + 'a'.repeat(64),
+        refId: '0x' + '1'.repeat(64),
+        programId: '0x' + '2'.repeat(64),
+        period: 202601,
+        amount: '300000',
+        commitment: '0x' + '3'.repeat(64),
+        cid: 'bafy' + 'a'.repeat(50),
+        recordedBy: '0x' + '1'.repeat(40),
+      }],
+      total: 1,
+      page: 1,
+      limit: 20,
+    })
+    assertNoForbiddenKeys(addrDto)
+
+    // Public summary
+    const pubSum = toPublicSummaryDto({
+      ...dirtyFields,
+      programs: 3,
+      budget: 10000000,
+      transactions: 20,
+      amount: 6000000,
+    })
+    assertNoForbiddenKeys(pubSum)
+    expect(pubSum.programs).toBe(3)
+
+    // Public program detail
+    const pubProg = toPublicProgramDetailDto({
+      ...dirtyFields,
+      program: {
+        ...dirtyFields,
+        code: 'PKH-2026',
+        name: 'Program PKH',
+        kind: 'TUNAI',
+        fundSource: 'APBD',
+        amountPerRecipient: 300000,
+        totalBudget: 3000000,
+        startPeriod: 202601,
+        endPeriod: 202612,
+        status: 'ACTIVE',
+      },
+      ledger: {
+        ...dirtyFields,
+        data: [{
+          ...dirtyFields,
+          txHash: '0x' + 'a'.repeat(64),
+          period: 202601,
+          amount: 300000,
+          time: new Date().toISOString(),
+        }],
+        total: 1,
+        page: 1,
+        limit: 20,
+      },
+    })
+    assertNoForbiddenKeys(pubProg)
+
+    // Public status-check
+    const statusDto = toPublicStatusCheckDto({
+      ...dirtyFields,
+      found: true,
+      name: 'Penerima Contoh',
+      entries: [{
+        ...dirtyFields,
+        program: { code: 'PKH-2026', name: 'Program PKH' },
+        period: 202601,
+        status: 'SUDAH_DISALURKAN',
+        txHash: '0x' + 'a'.repeat(64),
+      }],
+    })
+    assertNoForbiddenKeys(statusDto)
+    expect(statusDto.found).toBe(true)
+
+    // Withdraw evidence
+    const withdrawDto = toWithdrawEvidenceDto({
+      ...dirtyFields,
+      status: 'WITHDRAWN',
+      message: 'Penarikan sukses',
+    })
+    assertNoForbiddenKeys(withdrawDto)
+    expect(withdrawDto.status).toBe('WITHDRAWN')
   })
 })
 

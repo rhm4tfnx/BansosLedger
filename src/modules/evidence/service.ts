@@ -7,7 +7,7 @@ import { Disbursements } from '@/lib/db/models'
 import { appendAuditBestEffort } from '@/modules/audit/service'
 import { requestContext } from '@/lib/auth/request-origin'
 import { audit, body, boundedBody, conflict, DomainError, json, notFound, oid, reasonSchema, type DomainContext } from '../domain/http'
-import { toEvidenceDto } from '@/modules/disbursements/dto'
+import { toEvidenceDto, toWithdrawEvidenceDto } from '@/modules/disbursements/dto'
 import { cidSchema, gatewayUrl, pinata } from './pinata'
 
 const MAX_SIZE = 5 * 1024 * 1024
@@ -83,7 +83,7 @@ export async function withdraw(ctx: DomainContext) {
   if (!row) conflict('EVIDENCE_STATE', 'Bukti tidak ditemukan atau sedang diproses.')
   try {
     const evidence = row.evidence.find(item => item.cid === cid)!
-    if (evidence.status === 'WITHDRAWN' && !evidence.unpinPending) return json({ status: 'WITHDRAWN' })
+    if (evidence.status === 'WITHDRAWN' && !evidence.unpinPending) return json(toWithdrawEvidenceDto({ status: 'WITHDRAWN' }))
     if (!evidence.pinataId) throw new DomainError(503, 'PINATA_FILE_ID_MISSING', 'ID penyimpanan bukti tidak tersedia untuk penarikan.')
     const shared = await Disbursements.exists({ _id: { $ne: id }, evidence: { $elemMatch: { pinataId: evidence.pinataId, status: 'ACTIVE' } } })
     if (shared) conflict('SHARED_EVIDENCE', 'Bukti digunakan oleh penyaluran lain; diperlukan penanganan administrator.')
@@ -92,6 +92,6 @@ export async function withdraw(ctx: DomainContext) {
     await pinata.unpin(evidence.pinataId)
     await Disbursements.updateOne({ _id: id, 'evidenceLease.token': token }, { $set: { 'evidence.$[item].unpinPending': false } }, { arrayFilters: [{ 'item.cid': cid }] })
     await audit(ctx, 'EVIDENCE_WITHDRAWN', 'disbursements', ctx.params.id, { cid, reason })
-    return json({ status: 'WITHDRAWN', message: 'Pin dilepas. Salinan publik di IPFS pihak lain tidak dapat ditarik kembali.' })
+    return json(toWithdrawEvidenceDto({ status: 'WITHDRAWN', message: 'Pin dilepas. Salinan publik di IPFS pihak lain tidak dapat ditarik kembali.' }))
   } finally { await Disbursements.updateOne({ _id: id, 'evidenceLease.token': token }, { $unset: { evidenceLease: 1 } }) }
 }

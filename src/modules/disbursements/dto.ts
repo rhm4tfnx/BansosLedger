@@ -3,9 +3,11 @@ import {
   disbursementDtoSchema,
   evidenceDtoSchema,
   attemptDtoSchema,
+  withdrawEvidenceDtoSchema,
   type DisbursementDto,
   type EvidenceDto,
   type AttemptDto,
+  type WithdrawEvidenceDto,
 } from '@/lib/api-contract/dto'
 
 export function toEvidenceDto(doc: any): EvidenceDto {
@@ -62,4 +64,13 @@ export function toDisbursementDto(doc: any): DisbursementDto {
   }
   return disbursementDtoSchema.parse(dto)
 }
+
+export function toWithdrawEvidenceDto(data: any): WithdrawEvidenceDto {
+  const dto = {
+    status: 'WITHDRAWN' as const,
+    ...(data?.message ? { message: String(data.message) } : {}),
+  }
+  return withdrawEvidenceDtoSchema.parse(dto)
+}
+
 

@@ -7,6 +7,15 @@ import { chainConfig, provider, readChain } from '@/modules/chain/config'
 import { chainVerifier } from '@/modules/chain/verifier'
 import { networkStatus } from '@/modules/chain/network'
 import { toNetworkStatusDto } from '@/modules/chain/dto'
+import {
+  toExplorerBlockDto,
+  toExplorerBlockListDto,
+  toExplorerTxDto,
+  toExplorerAddressDto,
+  toExplorerContractDto,
+  toExplorerValidatorsDto,
+  toExplorerSearchDto,
+} from './dto'
 import { gatewayUrl, cidSchema } from '@/modules/evidence/pinata'
 import { json, notFound, pageQuery } from '@/modules/domain/http'
 const hash = z.string().regex(/^0x[0-9a-fA-F]{64}$/), address = z.string().regex(/^0x[0-9a-fA-F]{40}$/)
@@ -24,9 +33,9 @@ export async function blocks(request: Request) {
   const limit = Math.min(rawLimit, 20), latest = await readChain(() => provider().getBlockNumber())
   const start = latest - (page - 1) * limit
   const data = await Promise.all(Array.from({ length: Math.max(0, Math.min(limit, start + 1)) }, (_, i) => blockData(start - i)))
-  return json({ data, page, limit, total: latest + 1 })
+  return json(toExplorerBlockListDto({ data, page, limit, total: latest + 1 }))
 }
-export async function block(_request: Request, params: Record<string, string>) { return json(await blockData(z.coerce.number().int().nonnegative().safe().parse(params.n))) }
+export async function block(_request: Request, params: Record<string, string>) { return json(toExplorerBlockDto(await blockData(z.coerce.number().int().nonnegative().safe().parse(params.n)))) }
 export async function transaction(_request: Request, params: Record<string, string>) {
   const txHash = hash.parse(params.hash), rpc = provider(), config = chainConfig()
   const receipt = await readChain(() => rpc.getTransactionReceipt(txHash)); if (!receipt) notFound()
@@ -39,17 +48,17 @@ export async function transaction(_request: Request, params: Record<string, stri
       return [safeEvent(Object.fromEntries(parsed.fragment.inputs.map((field, i) => [field.name, parsed.args[i]])))]
     } catch { return [] }
   })
-  return json({ txHash, from: receipt.from, to: receipt.to, blockNumber: receipt.blockNumber, status: receipt.status === 1 ? 'SUCCESS' : 'REVERTED', utc: new Date(block.timestamp * 1000).toISOString(), events })
+  return json(toExplorerTxDto({ txHash, from: receipt.from, to: receipt.to, blockNumber: receipt.blockNumber, status: receipt.status === 1 ? 'SUCCESS' : 'REVERTED', utc: new Date(block.timestamp * 1000).toISOString(), events }))
 }
 export async function addressDetails(request: Request, params: Record<string, string>) {
   const addr = address.parse(params.addr).toLowerCase(); await connectDatabase()
   const paging = pageQuery(request, ['createdAt', 'blockNumber'])
   const config = chainConfig(), filter = { name: 'DisbursementRecorded', chainId: config.chainId, contractAddress: config.address, 'args.recordedBy': addr }
   const [rows, total] = await Promise.all([ChainEvents.find(filter).sort({ blockNumber: -1, logIndex: -1 }).skip(paging.skip).limit(paging.limit).lean(), ChainEvents.countDocuments(filter)])
-  return json({ address: addr, data: rows.map(row => ({ txHash: row.txHash, ...safeEvent(row.args) })), total, page: paging.page, limit: paging.limit })
+  return json(toExplorerAddressDto({ address: addr, data: rows.map(row => ({ txHash: row.txHash, ...safeEvent(row.args) })), total, page: paging.page, limit: paging.limit }))
 }
-export async function contract() { return json({ address: chainConfig().address, ...await chainVerifier.walletStatus(), abi: ledgerABI }) }
-export async function validators() { const status = await networkStatus(); return json({ data: status.validators, count: status.validatorCount }) }
+export async function contract() { return json(toExplorerContractDto({ address: chainConfig().address, ...await chainVerifier.walletStatus(), abi: ledgerABI })) }
+export async function validators() { const status = await networkStatus(); return json(toExplorerValidatorsDto({ data: status.validators, count: status.validatorCount })) }
 export async function network() { const status = await networkStatus(); const { validators: _validators, ...publicStatus } = status; return json(toNetworkStatusDto(publicStatus)) }
 export async function search(request: Request) {
   const q = z.string().min(1).max(66).parse(new URL(request.url).searchParams.get('q'))
@@ -58,6 +67,6 @@ export async function search(request: Request) {
   hash.parse(q); await connectDatabase()
   const config = chainConfig(), normalized = q.toLowerCase()
   const rows = await ChainEvents.find({ chainId: config.chainId, contractAddress: config.address, name: 'DisbursementRecorded', $or: [{ txHash: normalized }, { 'args.refId': normalized }, { 'args.recipientCommitment': normalized }] }).sort({ blockNumber: -1 }).limit(100).lean()
-  if (rows.length) return json({ data: rows.map(row => ({ txHash: row.txHash, ...safeEvent(row.args) })), limit: 100 })
+  if (rows.length) return json(toExplorerSearchDto({ data: rows.map(row => ({ txHash: row.txHash, ...safeEvent(row.args) })), limit: 100 }))
   return transaction(request, { hash: q })
 }

@@ -9,18 +9,24 @@ import { validateNik, nikBlindIndex } from '@/lib/crypto/nik'
 import { isSameOriginRequest, requestContext } from '@/lib/auth/request-origin'
 import { appendAudit } from '@/modules/audit/service'
 import { body, DomainError, json, notFound, pageQuery } from '@/modules/domain/http'
+import {
+  toPublicSummaryDto,
+  toPublicProgramDto,
+  toPublicProgramDetailDto,
+  toPublicStatusCheckDto,
+} from './dto'
 const visible = { isPublic: true, status: { $in: ['ACTIVE', 'CLOSED'] } }
 const fields = 'code name description kind fundSource amountPerRecipient totalBudget startPeriod endPeriod status'
 export async function summary() {
   await connectDatabase()
   const programs = await Programs.find(visible).select('_id totalBudget').lean()
   const sums = await Disbursements.aggregate([{ $match: { programId: { $in: programs.map(p => p._id) }, status: 'SUCCESS', deletedAt: null } }, { $group: { _id: null, transactions: { $sum: 1 }, amount: { $sum: '$amount' } } }])
-  return json({ programs: programs.length, budget: programs.reduce((sum, p) => sum + (p.totalBudget ?? 0), 0), transactions: sums[0]?.transactions ?? 0, amount: sums[0]?.amount ?? 0 })
+  return json(toPublicSummaryDto({ programs: programs.length, budget: programs.reduce((sum, p) => sum + (p.totalBudget ?? 0), 0), transactions: sums[0]?.transactions ?? 0, amount: sums[0]?.amount ?? 0 }))
 }
 export async function programs(request: Request) {
   await connectDatabase(); const paging = pageQuery(request, ['createdAt', 'name', 'code'])
   const [data, total] = await Promise.all([Programs.find(visible).select(fields).sort(paging.sort).skip(paging.skip).limit(paging.limit).lean(), Programs.countDocuments(visible)])
-  return json({ data, total, page: paging.page, limit: paging.limit, totalPages: Math.ceil(total / paging.limit) })
+  return json({ data: data.map(toPublicProgramDto), total, page: paging.page, limit: paging.limit, totalPages: Math.ceil(total / paging.limit) })
 }
 export async function program(request: Request, params: Record<string, string>) {
   const code = z.string().regex(/^[A-Z0-9-]{3,20}$/).parse(params.code)
@@ -28,7 +34,7 @@ export async function program(request: Request, params: Record<string, string>) 
   const program = await Programs.findOne({ ...visible, code }).select(fields).lean(); if (!program) notFound()
   const filter = { programId: program._id, status: 'SUCCESS', deletedAt: null }
   const [rows, total] = await Promise.all([Disbursements.find(filter).select('periodId amount chain.txHash chain.blockTimestamp').sort(paging.sort).skip(paging.skip).limit(paging.limit).lean(), Disbursements.countDocuments(filter)])
-  return json({ program, ledger: { data: rows.map(row => ({ txHash: row.chain?.txHash, period: row.periodId, amount: row.amount, time: row.chain?.blockTimestamp })), total, page: paging.page, limit: paging.limit, totalPages: Math.ceil(total / paging.limit) } })
+  return json(toPublicProgramDetailDto({ program, ledger: { data: rows.map(row => ({ txHash: row.chain?.txHash, period: row.periodId, amount: row.amount, time: row.chain?.blockTimestamp })), total, page: paging.page, limit: paging.limit, totalPages: Math.ceil(total / paging.limit) } }))
 }
 export async function verifyTurnstile(token: string, ip: string) {
   const secret = getEnv('TURNSTILE_SECRET')
@@ -55,7 +61,7 @@ export async function statusCheck(request: Request) {
     await connectDatabase()
     const recipient = await Recipients.findOne({ nikBlindIndex: blind, status: 'FINAL', deletedAt: null }).select('_id name').lean()
     await appendAudit({ actor: 'anonymous', action: 'PUBLIC_STATUS_CHECK', diff: { blindIndexPrefix: blind.slice(0, 12) } })
-    if (!recipient) return json({ found: false })
+    if (!recipient) return json(toPublicStatusCheckDto({ found: false }))
     const enrollmentIds = await Enrollments.find({ recipientId: recipient._id }).distinct('programId')
     const enrolledPrograms = await Programs.find({ _id: { $in: enrollmentIds }, status: { $in: ['ACTIVE', 'CLOSED'] } }).select('_id code name startPeriod endPeriod').limit(100).lean()
     const paid = await Disbursements.find({ recipientId: recipient._id, status: 'SUCCESS', deletedAt: null }).select('programId periodId chain.txHash').limit(5000).lean()
@@ -69,6 +75,6 @@ export async function statusCheck(request: Request) {
         entries.push({ program: { code: program.code, name: program.name }, period, status: successes.has(key) ? 'SUDAH_DISALURKAN' : 'BELUM_DISALURKAN', ...(txHash ? { txHash } : {}) })
       }
     }
-    return json({ found: true, name: recipient.name, entries })
+    return json(toPublicStatusCheckDto({ found: true, name: recipient.name, entries }))
   } finally { await new Promise(resolve => setTimeout(resolve, Math.max(0, delay - (Date.now() - started)))) }
 }
