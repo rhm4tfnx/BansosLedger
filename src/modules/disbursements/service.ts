@@ -1,19 +1,55 @@
 import 'server-only'
 import { z } from 'zod'
 import { createHash } from 'node:crypto'
-import { Types, type FilterQuery } from 'mongoose'
+import { Types, type FilterQuery, type PipelineStage } from 'mongoose'
 import { Programs, Recipients, Enrollments, Disbursements } from '@/lib/db/models'
 import { refIdFromDataId, periodIdFromYYYYMM } from '@/lib/blockchain/chain-keys'
 import { canonicalJSON } from '@/modules/audit/service'
 import { assertDeadline } from '@/modules/chain/config'
 import { chainVerifier, chainMessage, type Receipt } from '../chain/verifier'
-import { toDisbursementDto } from './dto'
+import { toDisbursementDto, toDisbursementCreatedDto } from './dto'
 import { audit, body, conflict, DomainError, duplicate, idSchema, json, notFound, oid, pageQuery, periodSchema, query, reasonSchema, txSchema, type DomainContext } from '../domain/http'
 
 export const disbursementInput = z.object({ programId: idSchema, period: periodSchema, recipientId: idSchema, disbursedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => { const date = new Date(value); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value }), note: z.string().trim().max(2000).default('') }).strict()
 export const disbursementProjection = '-idempotencyKey -requestHash -evidenceLease -evidence.pinataId'
 export function duplicateDisbursement(error: unknown): never { if (duplicate(error)) conflict('AlreadyDisbursed', chainMessage('AlreadyDisbursed')); throw error }
 function availableEvidence() { return { $or: [{ 'evidenceLease.token': { $exists: false } }, { 'evidenceLease.expiresAt': { $lte: new Date() } }] } }
+function disbursementEnrichmentStages(): PipelineStage.FacetPipelineStage[] {
+  return [
+    {
+      $lookup: {
+        from: 'programs',
+        localField: 'programId',
+        foreignField: '_id',
+        pipeline: [{ $project: { _id: 1, code: 1, name: 1 } }],
+        as: 'program',
+      },
+    },
+    {
+      $lookup: {
+        from: 'recipients',
+        localField: 'recipientId',
+        foreignField: '_id',
+        pipeline: [{ $project: { _id: 1, name: 1, nikMasked: 1 } }],
+        as: 'recipient',
+      },
+    },
+    {
+      $set: {
+        program: { $arrayElemAt: ['$program', 0] },
+        recipient: { $arrayElemAt: ['$recipient', 0] },
+      },
+    },
+    {
+      $project: {
+        idempotencyKey: 0,
+        requestHash: 0,
+        evidenceLease: 0,
+        'evidence.pinataId': 0,
+      },
+    },
+  ]
+}
 export async function prevalidate(programId: Types.ObjectId, recipientId: Types.ObjectId, period: number, excludeId?: Types.ObjectId) {
   const program = await Programs.findById(programId).lean()
   if (!program) notFound()
@@ -23,7 +59,7 @@ export async function prevalidate(programId: Types.ObjectId, recipientId: Types.
   if (!enrollment) conflict('RecipientNotRegistered', chainMessage('RecipientNotRegistered'))
   const existing = await Disbursements.exists({ programId, recipientId, periodId: period, status: { $in: ['PENDING', 'SUCCESS'] }, ...(excludeId ? { _id: { $ne: excludeId } } : {}) })
   if (existing) conflict('AlreadyDisbursed', chainMessage('AlreadyDisbursed'))
-  const recipient = await Recipients.findOne({ _id: recipientId, status: 'FINAL', deletedAt: null }).select('commitment').lean()
+  const recipient = await Recipients.findOne({ _id: recipientId, status: 'FINAL', deletedAt: null }).select('commitment name nikMasked').lean()
   if (!recipient?.commitment) conflict('RecipientNotRegistered', chainMessage('RecipientNotRegistered'))
   return { program, recipient }
 }
@@ -41,8 +77,17 @@ export async function create(ctx: DomainContext) {
     const existing = idempotencyKey ? await Disbursements.findOne({ idempotencyKey }).lean() : null
     if (!existing) return null
     if (existing.requestHash !== requestHash) conflict('IDEMPOTENCY_CONFLICT', 'Idempotency-Key sudah digunakan untuk permintaan berbeda.')
-    const program = await Programs.findById(existing.programId).select('programId').lean()
-    return json({ id: existing._id, status: existing.status, deleted: !!existing.deletedAt, preview: preview(existing, program?.programId) })
+    const [program, recipient] = await Promise.all([
+      Programs.findById(existing.programId).select('programId code name').lean(),
+      Recipients.findOne({ _id: existing.recipientId }).select('name nikMasked').lean(),
+    ])
+    return json(
+      toDisbursementCreatedDto(
+        { ...existing, program, recipient },
+        preview(existing, program?.programId),
+        !!existing.deletedAt,
+      ),
+    )
   }
   const prior = await replay(); if (prior) return prior
   const programId = oid(input.programId), recipientId = oid(input.recipientId)
@@ -53,7 +98,16 @@ export async function create(ctx: DomainContext) {
     row = await Disbursements.create({ _id, refId: refIdFromDataId(String(_id)), programId, recipientId, periodId: periodIdFromYYYYMM(input.period), commitment: recipient.commitment, amount: program.amountPerRecipient, disbursedDate: new Date(input.disbursedDate), note: input.note, status: 'DRAFT', createdBy: ctx.actor.userId, ...(idempotencyKey ? { idempotencyKey, requestHash } : {}) })
   } catch (error) { if (duplicate(error)) { const previous = await replay(); if (previous) return previous }; duplicateDisbursement(error) }
   await audit(ctx, 'DISBURSEMENT_CREATED', 'disbursements', String(row._id))
-  return json({ id: row._id, status: row.status, preview: preview(row, program.programId) }, 201)
+  const plainRow = typeof (row as unknown as { toObject?: () => Record<string, unknown> }).toObject === 'function'
+    ? (row as unknown as { toObject: () => Record<string, unknown> }).toObject()
+    : (row as unknown as Record<string, unknown>)
+  return json(
+    toDisbursementCreatedDto(
+      { ...plainRow, program, recipient },
+      preview(row, program.programId),
+    ),
+    201,
+  )
 }
 export async function list(ctx: DomainContext) {
   const paging = pageQuery(ctx.request, ['createdAt', 'updatedAt', 'periodId', 'amount', 'disbursedDate'])
@@ -63,11 +117,30 @@ export async function list(ctx: DomainContext) {
   if (input.recipientId) filter.recipientId = oid(input.recipientId)
   if (input.period) filter.periodId = input.period
   if (input.status) filter.status = input.status
-  const [data, total] = await Promise.all([Disbursements.find(filter).select(disbursementProjection).sort(paging.sort).skip(paging.skip).limit(paging.limit).lean(), Disbursements.countDocuments(filter)])
+  const [agg] = await Disbursements.aggregate<{ data: unknown[]; total: { count: number }[] }>([
+    { $match: filter },
+    {
+      $facet: {
+        data: [
+          { $sort: paging.sort },
+          { $skip: paging.skip },
+          { $limit: paging.limit },
+          ...disbursementEnrichmentStages(),
+        ],
+        total: [{ $count: 'count' }],
+      },
+    },
+  ])
+  const data = agg?.data ?? []
+  const total = agg?.total[0]?.count ?? 0
   return json({ data: data.map(toDisbursementDto), total, page: paging.page, limit: paging.limit, totalPages: Math.ceil(total / paging.limit) })
 }
 export async function detail(ctx: DomainContext) {
-  const row = await Disbursements.findOne({ _id: oid(ctx.params.id), deletedAt: null }).select(disbursementProjection).lean()
+  const [row] = await Disbursements.aggregate([
+    { $match: { _id: oid(ctx.params.id), deletedAt: null } },
+    { $limit: 1 },
+    ...disbursementEnrichmentStages(),
+  ])
   if (!row) notFound()
   return json(toDisbursementDto(row))
 }
@@ -82,7 +155,7 @@ export async function submitted(ctx: DomainContext) {
   const { txHash } = await body(ctx.request, z.object({ txHash: txSchema }).strict())
   const row = await Disbursements.findOne({ _id: oid(ctx.params.id), deletedAt: null }).lean(); if (!row) notFound()
   if (row.status !== 'DRAFT') conflict()
-  await prevalidate(row.programId, row.recipientId, row.periodId!, row._id)
+  const { program, recipient } = await prevalidate(row.programId, row.recipientId, row.periodId!, row._id)
   if (!row.evidence.some(item => item.status === 'ACTIVE')) conflict('EVIDENCE_REQUIRED', 'Minimal satu bukti aktif wajib diunggah.')
   let updated
   try {
@@ -90,7 +163,7 @@ export async function submitted(ctx: DomainContext) {
   } catch (error) { duplicateDisbursement(error) }
   if (!updated) conflict()
   await audit(ctx, 'TX_SUBMITTED', 'disbursements', ctx.params.id, { txHash })
-  return json(toDisbursementDto(updated))
+  return json(toDisbursementDto({ ...updated, program, recipient }))
 }
 async function persistConfirmed(id: Types.ObjectId, txHash: string, receipt: Receipt, actorId: string) {
   return Disbursements.findOneAndUpdate({ _id: id, status: 'PENDING', 'chain.txHash': txHash, deletedAt: null }, { $set: { status: 'SUCCESS', chain: { ...receipt, confirmedAt: new Date() } }, $push: { attempts: { at: new Date(), txHash, outcome: 'CONFIRMED', by: actorId } }, $unset: { lastError: 1 } }, { new: true }).select(disbursementProjection).lean()
@@ -102,7 +175,7 @@ export async function confirm(ctx: DomainContext) {
   if (!txHash || row.chain?.txHash !== txHash) conflict('TX_HASH_MISMATCH', 'Hash transaksi tidak cocok dengan percobaan aktif.')
   if (row.status === 'SUCCESS') return detail(ctx)
   if (row.status !== 'PENDING') conflict()
-  const program = await Programs.findById(row.programId).select('programId').lean(); if (!program) notFound()
+  const program = await Programs.findById(row.programId).select('programId code name').lean(); if (!program) notFound()
   const result = await chainVerifier.verifyDisbursement(txHash, { refId: row.refId, programId: program.programId!, periodId: row.periodId!, commitment: row.commitment!, amount: row.amount!, evidenceCids: row.evidence.map(item => item.cid!).filter(Boolean) })
   if (result.status === 'PENDING' || result.status === 'NOT_FOUND') return json({ status: 'PENDING' }, 202)
   assertDeadline()
@@ -115,16 +188,16 @@ export async function confirm(ctx: DomainContext) {
   }
   if (!updated) conflict('RECORD_CHANGED', 'Status transaksi sudah berubah. Muat ulang data.')
   await audit(ctx, 'DISBURSEMENT_CONFIRMED', 'disbursements', ctx.params.id, { txHash, outcome: result.status })
-  return json({ ...toDisbursementDto(updated), ...(result.status === 'CONFIRMED' ? {} : { errorCode: result.errorCode, message: chainMessage(result.errorCode) }) })
+  return json({ ...toDisbursementDto({ ...updated, program }), ...(result.status === 'CONFIRMED' ? {} : { errorCode: result.errorCode, message: chainMessage(result.errorCode) }) })
 }
 export async function retry(ctx: DomainContext) {
   await body(ctx.request, z.object({}).strict())
   const row = await Disbursements.findOne({ _id: oid(ctx.params.id), status: 'FAILED', deletedAt: null }).lean()
   if (!row) conflict()
-  await prevalidate(row.programId, row.recipientId, row.periodId!, row._id)
+  const { program, recipient } = await prevalidate(row.programId, row.recipientId, row.periodId!, row._id)
   let updated
   try { updated = await Disbursements.findOneAndUpdate({ _id: row._id, status: 'FAILED', deletedAt: null, ...availableEvidence() }, { $set: { status: 'DRAFT' }, $unset: { chain: 1, lastError: 1 }, $push: { attempts: { at: new Date(), outcome: 'RETRY', by: ctx.actor.userId } } }, { new: true }).select(disbursementProjection).lean() } catch (error) { duplicateDisbursement(error) }
   if (!updated) conflict()
   await audit(ctx, 'DISBURSEMENT_RETRY', 'disbursements', ctx.params.id)
-  return json(toDisbursementDto(updated))
+  return json(toDisbursementDto({ ...updated, program, recipient }))
 }

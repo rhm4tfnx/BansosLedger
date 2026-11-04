@@ -1,12 +1,12 @@
 import 'server-only'
 import { z } from 'zod'
 import { Interface } from 'ethers'
-import type { FilterQuery } from 'mongoose'
+import type { FilterQuery, PipelineStage, Types } from 'mongoose'
 import { Programs, Recipients, Enrollments, Disbursements } from '@/lib/db/models'
 import { programIdFromCode } from '@/lib/blockchain/chain-keys'
 import { getEnv } from '@/lib/env'
 import { chainVerifier, chainMessage } from '../chain/verifier'
-import { toProgramDto } from './dto'
+import { toProgramDto, toProgramEnrollmentItemDto } from './dto'
 import { audit, body, conflict, DomainError, duplicate, escapeSearch, idSchema, json, notFound, oid, pageQuery, periodSchema, query, txSchema, type DomainContext } from '../domain/http'
 
 export const programInput = z.object({ isPublic: z.boolean().optional(), code: z.string().regex(/^[A-Z0-9-]{3,20}$/), name: z.string().trim().min(2).max(160), description: z.string().trim().max(3000).optional(), fundSource: z.string().trim().min(1).max(160), kind: z.enum(['TUNAI', 'BARANG']), amountPerRecipient: z.number().int().positive().max(1e12), totalBudget: z.number().int().nonnegative().max(1e15), startPeriod: periodSchema, endPeriod: periodSchema }).strict()
@@ -16,6 +16,79 @@ function payload(name: string, values: unknown[]) {
   const to = getEnv('NEXT_PUBLIC_CONTRACT_ADDRESS'), chainId = getEnv('NEXT_PUBLIC_CHAIN_ID')
   if (!to || !chainId) throw new DomainError(503, 'CHAIN_NOT_CONFIGURED', 'Blockchain belum dikonfigurasi.')
   return { to, chainId, data: programABI.encodeFunctionData(name, values) }
+}
+// Rule: remainingBudget = totalBudget minus disbursedAmount, counting SUCCESS disbursements only;
+// PENDING and FAILED (as well as DRAFT) are not disbursed. All money is integer rupiah.
+function programEnrichmentStages(): PipelineStage.FacetPipelineStage[] {
+  return [
+    {
+      $lookup: {
+        from: 'enrollments',
+        localField: '_id',
+        foreignField: 'programId',
+        pipeline: [
+          {
+            $group: {
+              _id: null,
+              enrolledCount: { $sum: 1 },
+              registeredCount: {
+                $sum: { $cond: [{ $eq: ['$status', 'REGISTERED_ONCHAIN'] }, 1, 0] },
+              },
+            },
+          },
+        ],
+        as: '_enrollmentStats',
+      },
+    },
+    {
+      $lookup: {
+        from: 'disbursements',
+        let: { progId: '$_id' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ['$programId', '$$progId'] },
+              status: 'SUCCESS',
+              deletedAt: null,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              disbursedCount: { $sum: 1 },
+              disbursedAmount: { $sum: '$amount' },
+            },
+          },
+        ],
+        as: '_disbursementStats',
+      },
+    },
+    {
+      $set: {
+        enrolledCount: { $ifNull: [{ $arrayElemAt: ['$_enrollmentStats.enrolledCount', 0] }, 0] },
+        registeredCount: { $ifNull: [{ $arrayElemAt: ['$_enrollmentStats.registeredCount', 0] }, 0] },
+        disbursedCount: { $ifNull: [{ $arrayElemAt: ['$_disbursementStats.disbursedCount', 0] }, 0] },
+        disbursedAmount: { $ifNull: [{ $arrayElemAt: ['$_disbursementStats.disbursedAmount', 0] }, 0] },
+      },
+    },
+    {
+      $set: {
+        // remainingBudget = totalBudget minus disbursedAmount, counting SUCCESS disbursements only; PENDING and FAILED are not disbursed.
+        remainingBudget: { $subtract: [{ $ifNull: ['$totalBudget', 0] }, '$disbursedAmount'] },
+      },
+    },
+    {
+      $unset: ['_enrollmentStats', '_disbursementStats'],
+    },
+  ]
+}
+async function findEnrichedProgramById(id: Types.ObjectId) {
+  const [row] = await Programs.aggregate([
+    { $match: { _id: id } },
+    { $limit: 1 },
+    ...programEnrichmentStages(),
+  ])
+  return row ?? null
 }
 export async function metrics(program: { _id: unknown; amountPerRecipient?: number | null; totalBudget?: number | null }) {
   const id = oid(String(program._id))
@@ -29,7 +102,22 @@ export async function list(ctx: DomainContext) {
   const filter: FilterQuery<unknown> = {}
   if (input.status) filter.status = input.status
   if (input.search) filter.name = { $regex: escapeSearch(input.search), $options: 'i' }
-  const [data, total] = await Promise.all([Programs.find(filter).sort(paging.sort).skip(paging.skip).limit(paging.limit).lean(), Programs.countDocuments(filter)])
+  const [agg] = await Programs.aggregate<{ data: unknown[]; total: { count: number }[] }>([
+    { $match: filter },
+    {
+      $facet: {
+        data: [
+          { $sort: paging.sort },
+          { $skip: paging.skip },
+          { $limit: paging.limit },
+          ...programEnrichmentStages(),
+        ],
+        total: [{ $count: 'count' }],
+      },
+    },
+  ])
+  const data = agg?.data ?? []
+  const total = agg?.total[0]?.count ?? 0
   return json({ data: data.map(toProgramDto), total, page: paging.page, limit: paging.limit, totalPages: Math.ceil(total / paging.limit) })
 }
 export async function create(ctx: DomainContext) {
@@ -41,8 +129,18 @@ export async function create(ctx: DomainContext) {
   return json(toProgramDto(row), 201)
 }
 export async function detail(ctx: DomainContext) {
-  const row = await Programs.findById(oid(ctx.params.id)).lean(); if (!row) notFound()
-  return json({ ...toProgramDto(row), summary: await metrics(row) })
+  const row = await findEnrichedProgramById(oid(ctx.params.id))
+  if (!row) notFound()
+  const dto = toProgramDto(row)
+  const pagu = dto.totalBudget
+  const summary = {
+    pagu,
+    target: dto.enrolledCount,
+    realisasi: { count: dto.disbursedCount, rupiah: dto.disbursedAmount },
+    sisa: dto.remainingBudget,
+    percentage: pagu ? (dto.disbursedAmount / pagu) * 100 : 0,
+  }
+  return json({ ...dto, summary })
 }
 export async function update(ctx: DomainContext) {
   const input = await body(ctx.request, programInput.partial().refine(value => Object.keys(value).length > 0))
@@ -56,10 +154,63 @@ export async function update(ctx: DomainContext) {
   catch (error) { if (duplicate(error)) conflict('DUPLICATE_PROGRAM_CODE', 'Kode program sudah terdaftar.'); throw error }
   if (!changed) conflict('RECORD_CHANGED', 'Data berubah. Muat ulang program.')
   await audit(ctx, 'PROGRAM_UPDATED', 'programs', ctx.params.id)
-  return json(toProgramDto(changed))
+  const enriched = await findEnrichedProgramById(row._id)
+  return json(toProgramDto(enriched ?? changed))
 }
 const enrollmentInput = z.object({ recipientIds: z.array(idSchema).min(1).max(100).refine(ids => new Set(ids.map(id => id.toLowerCase())).size === ids.length) }).strict()
 const registerInput = z.union([enrollmentInput, z.object({ commitments: z.array(z.string().regex(/^0x[0-9a-fA-F]{64}$/).transform(value => value.toLowerCase())).min(1).max(100).refine(values => new Set(values).size === values.length) }).strict()])
+export async function listEnrollments(ctx: DomainContext) {
+  const programId = oid(ctx.params.id)
+  const exists = await Programs.exists({ _id: programId })
+  if (!exists) notFound()
+  const paging = pageQuery(ctx.request, ['createdAt', 'updatedAt', 'status'])
+  const input = z.object({ status: z.enum(['ENROLLED', 'REGISTERED_ONCHAIN']).optional() }).parse(query(ctx.request))
+  const filter: FilterQuery<unknown> = { programId, ...(input.status ? { status: input.status } : {}) }
+  const [agg] = await Enrollments.aggregate<{ data: unknown[]; total: { count: number }[] }>([
+    { $match: filter },
+    {
+      $facet: {
+        data: [
+          { $sort: paging.sort },
+          { $skip: paging.skip },
+          { $limit: paging.limit },
+          {
+            $lookup: {
+              from: 'recipients',
+              localField: 'recipientId',
+              foreignField: '_id',
+              pipeline: [{ $project: { _id: 1, name: 1, nikMasked: 1 } }],
+              as: 'recipient',
+            },
+          },
+          {
+            $set: {
+              recipient: { $arrayElemAt: ['$recipient', 0] },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              recipientId: 1,
+              recipient: 1,
+              status: 1,
+            },
+          },
+        ],
+        total: [{ $count: 'count' }],
+      },
+    },
+  ])
+  const data = agg?.data ?? []
+  const total = agg?.total[0]?.count ?? 0
+  return json({
+    data: data.map(toProgramEnrollmentItemDto),
+    total,
+    page: paging.page,
+    limit: paging.limit,
+    totalPages: Math.ceil(total / paging.limit),
+  })
+}
 export async function enroll(ctx: DomainContext) {
   const { recipientIds } = await body(ctx.request, enrollmentInput)
   const program = await Programs.findById(oid(ctx.params.id)).lean(); if (!program) notFound()
@@ -114,6 +265,6 @@ export async function confirm(ctx: DomainContext) {
     }
   }
   await audit(ctx, `PROGRAM_${kind.toUpperCase()}_CONFIRMED`, 'programs', ctx.params.id, { txHash })
-  const updatedDoc = await Programs.findById(row._id).lean()
+  const updatedDoc = await findEnrichedProgramById(row._id)
   return json(toProgramDto(updatedDoc))
 }

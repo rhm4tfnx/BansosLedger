@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { toRecipientDto } from '@/modules/recipients/dto'
-import { toProgramDto, toEnrollmentDto } from '@/modules/programs/dto'
-import { toDisbursementDto, toEvidenceDto, toAttemptDto, toWithdrawEvidenceDto } from '@/modules/disbursements/dto'
+import { toProgramDto, toEnrollmentDto, toProgramEnrollmentItemDto } from '@/modules/programs/dto'
+import { toDisbursementDto, toDisbursementCreatedDto, toEvidenceDto, toAttemptDto, toWithdrawEvidenceDto } from '@/modules/disbursements/dto'
 import { toAuditLogDto } from '@/modules/audit/dto'
 import { toRealizationReportDto, toDashboardSummaryDto, toWalletStatusDto } from '@/modules/reports/dto'
 import { toReconciliationDto, toNetworkStatusDto } from '@/modules/chain/dto'
@@ -24,7 +24,9 @@ import {
   recipientDtoSchema,
   programDtoSchema,
   enrollmentDtoSchema,
+  programEnrollmentItemDtoSchema,
   disbursementDtoSchema,
+  disbursementCreatedDtoSchema,
   evidenceDtoSchema,
   attemptDtoSchema,
   auditLogDtoSchema,
@@ -98,6 +100,9 @@ describe('DTO Mappers - Security & Structure', () => {
       phone: '08123456789',
       status: 'FINAL',
       commitment: '0x' + '1'.repeat(64),
+      enrollments: [
+        { ...dirtyFields, programCode: 'PRG-01', status: 'REGISTERED_ONCHAIN' },
+      ],
       createdAt: new Date('2026-01-01T00:00:00Z'),
       updatedAt: new Date('2026-01-02T00:00:00Z'),
       finalizedAt: new Date('2026-01-03T00:00:00Z'),
@@ -106,10 +111,11 @@ describe('DTO Mappers - Security & Structure', () => {
     const dto = toRecipientDto(raw)
     assertNoForbiddenKeys(dto)
     expect(dto.id).toBe('507f1f77bcf86cd799439011')
+    expect(dto.enrollments).toEqual([{ programCode: 'PRG-01', status: 'REGISTERED_ONCHAIN' }])
     expect(recipientDtoSchema.parse(dto)).toEqual(dto)
   })
 
-  test('toProgramDto never leaks internal keys and formats integers/dates', () => {
+  test('toProgramDto never leaks internal keys and formats integers/dates and budget counts', () => {
     const raw = {
       ...dirtyFields,
       code: 'PRG-01',
@@ -120,6 +126,10 @@ describe('DTO Mappers - Security & Structure', () => {
       kind: 'TUNAI',
       amountPerRecipient: 300000,
       totalBudget: 30000000,
+      enrolledCount: 12,
+      registeredCount: 10,
+      disbursedCount: 4,
+      disbursedAmount: 1200000,
       startPeriod: 202601,
       endPeriod: 202612,
       status: 'ACTIVE',
@@ -132,10 +142,15 @@ describe('DTO Mappers - Security & Structure', () => {
     const dto = toProgramDto(raw)
     assertNoForbiddenKeys(dto)
     expect(dto.id).toBe('507f1f77bcf86cd799439011')
+    expect(dto.enrolledCount).toBe(12)
+    expect(dto.registeredCount).toBe(10)
+    expect(dto.disbursedCount).toBe(4)
+    expect(dto.disbursedAmount).toBe(1200000)
+    expect(dto.remainingBudget).toBe(28800000)
     expect(programDtoSchema.parse(dto)).toEqual(dto)
   })
 
-  test('toEnrollmentDto never leaks internal keys', () => {
+  test('toEnrollmentDto and toProgramEnrollmentItemDto never leak internal keys', () => {
     const raw = {
       ...dirtyFields,
       programId: '507f1f77bcf86cd799439012',
@@ -150,14 +165,50 @@ describe('DTO Mappers - Security & Structure', () => {
     assertNoForbiddenKeys(dto)
     expect(dto.id).toBe('507f1f77bcf86cd799439011')
     expect(enrollmentDtoSchema.parse(dto)).toEqual(dto)
+
+    const itemDto = toProgramEnrollmentItemDto({
+      ...dirtyFields,
+      recipientId: '507f1f77bcf86cd799439013',
+      recipient: {
+        ...dirtyFields,
+        _id: '507f1f77bcf86cd799439013',
+        name: 'Warga Terdaftar',
+        nikMasked: '7305••••••••1234',
+        phone: '0811111111',
+      },
+      status: 'REGISTERED_ONCHAIN',
+    })
+    assertNoForbiddenKeys(itemDto)
+    expect(itemDto).toEqual({
+      id: '507f1f77bcf86cd799439011',
+      recipient: {
+        id: '507f1f77bcf86cd799439013',
+        name: 'Warga Terdaftar',
+        nikMasked: '7305••••••••1234',
+      },
+      status: 'REGISTERED_ONCHAIN',
+    })
+    expect(programEnrollmentItemDtoSchema.parse(itemDto)).toEqual(itemDto)
   })
 
-  test('toDisbursementDto never leaks internal keys in root, evidence, attempts, or chain', () => {
+  test('toDisbursementDto and toDisbursementCreatedDto never leak internal keys in root, program, recipient, evidence, attempts, or chain', () => {
     const raw = {
       ...dirtyFields,
       refId: '0x' + '4'.repeat(64),
       programId: '507f1f77bcf86cd799439012',
       recipientId: '507f1f77bcf86cd799439013',
+      program: {
+        ...dirtyFields,
+        _id: '507f1f77bcf86cd799439012',
+        code: 'PRG-01',
+        name: 'Program BLT',
+      },
+      recipient: {
+        ...dirtyFields,
+        _id: '507f1f77bcf86cd799439013',
+        name: 'Penerima Uji',
+        nikMasked: '7305••••••••1234',
+      },
       periodId: 202601,
       commitment: '0x' + '5'.repeat(64),
       amount: 300000,
@@ -205,7 +256,24 @@ describe('DTO Mappers - Security & Structure', () => {
     const dto = toDisbursementDto(raw)
     assertNoForbiddenKeys(dto)
     expect(dto.id).toBe('507f1f77bcf86cd799439011')
+    expect(dto.program).toEqual({ id: '507f1f77bcf86cd799439012', code: 'PRG-01', name: 'Program BLT' })
+    expect(dto.recipient).toEqual({ id: '507f1f77bcf86cd799439013', name: 'Penerima Uji', nikMasked: '7305••••••••1234' })
     expect(disbursementDtoSchema.parse(dto)).toEqual(dto)
+
+    const createdDto = toDisbursementCreatedDto(
+      raw,
+      {
+        ...dirtyFields,
+        refId: raw.refId,
+        programId: '0x' + '2'.repeat(64),
+        periodId: 202601,
+        commitment: raw.commitment,
+        amount: 300000,
+      },
+      false,
+    )
+    assertNoForbiddenKeys(createdDto)
+    expect(disbursementCreatedDtoSchema.parse(createdDto)).toEqual(createdDto)
   })
 
   test('toEvidenceDto and toAttemptDto never leak internal keys', () => {
@@ -309,6 +377,12 @@ describe('DTO Mappers - Security & Structure', () => {
       percentage: 20,
       pending: 1,
       failed: 0,
+      monthly: [
+        { ...dirtyFields, periodId: 202601, count: 10, amount: 1000000 },
+      ],
+      byProgram: [
+        { ...dirtyFields, code: 'PRG-01', name: 'Program BLT', count: 10, amount: 1000000 },
+      ],
       network: {
         ...dirtyFields,
         status: 'Normal',

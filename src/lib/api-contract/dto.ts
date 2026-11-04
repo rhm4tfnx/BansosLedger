@@ -43,6 +43,12 @@ export type ListEnvelope<T> = {
 }
 
 // 1. RecipientDto
+export const recipientEnrollmentSummaryDtoSchema = z.object({
+  programCode: z.string(),
+  status: z.enum(ENROLLMENT_STATUSES),
+}).strict()
+export type RecipientEnrollmentSummaryDto = z.infer<typeof recipientEnrollmentSummaryDtoSchema>
+
 export const recipientDtoSchema = z.object({
   id: z.string(),
   nikMasked: z.string(),
@@ -55,6 +61,7 @@ export const recipientDtoSchema = z.object({
   phone: z.string().nullable(),
   status: z.enum(RECIPIENT_STATUSES),
   commitment: z.string().nullable(),
+  enrollments: z.array(recipientEnrollmentSummaryDtoSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
   finalizedAt: z.string().nullable(),
@@ -72,6 +79,11 @@ export const programDtoSchema = z.object({
   kind: z.enum(PROGRAM_KINDS),
   amountPerRecipient: z.number().int().nonnegative(),
   totalBudget: z.number().int().nonnegative(),
+  enrolledCount: z.number().int().nonnegative(),
+  registeredCount: z.number().int().nonnegative(),
+  disbursedCount: z.number().int().nonnegative(),
+  disbursedAmount: z.number().int().nonnegative(),
+  remainingBudget: z.number().int(),
   startPeriod: z.number().int(),
   endPeriod: z.number().int(),
   status: z.enum(PROGRAM_STATUSES),
@@ -85,7 +97,7 @@ export const programDtoSchema = z.object({
 }).strict()
 export type ProgramDto = z.infer<typeof programDtoSchema>
 
-// 3. EnrollmentDto
+// 3. EnrollmentDto & ProgramEnrollmentItemDto
 export const enrollmentDtoSchema = z.object({
   id: z.string(),
   programId: z.string(),
@@ -96,6 +108,17 @@ export const enrollmentDtoSchema = z.object({
   updatedAt: z.string(),
 }).strict()
 export type EnrollmentDto = z.infer<typeof enrollmentDtoSchema>
+
+export const programEnrollmentItemDtoSchema = z.object({
+  id: z.string(),
+  recipient: z.object({
+    id: z.string(),
+    name: z.string(),
+    nikMasked: z.string(),
+  }).strict(),
+  status: z.enum(ENROLLMENT_STATUSES),
+}).strict()
+export type ProgramEnrollmentItemDto = z.infer<typeof programEnrollmentItemDtoSchema>
 
 // 4. EvidenceDto
 export const evidenceDtoSchema = z.object({
@@ -122,11 +145,27 @@ export const attemptDtoSchema = z.object({
 export type AttemptDto = z.infer<typeof attemptDtoSchema>
 
 // 6. DisbursementDto
+export const disbursementProgramSummaryDtoSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+}).strict()
+export type DisbursementProgramSummaryDto = z.infer<typeof disbursementProgramSummaryDtoSchema>
+
+export const disbursementRecipientSummaryDtoSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  nikMasked: z.string(),
+}).strict()
+export type DisbursementRecipientSummaryDto = z.infer<typeof disbursementRecipientSummaryDtoSchema>
+
 export const disbursementDtoSchema = z.object({
   id: z.string(),
   refId: z.string(),
   programId: z.string(),
   recipientId: z.string(),
+  program: disbursementProgramSummaryDtoSchema,
+  recipient: disbursementRecipientSummaryDtoSchema,
   periodId: z.number().int(),
   commitment: z.string().nullable(),
   amount: z.number().int().nonnegative(),
@@ -148,6 +187,21 @@ export const disbursementDtoSchema = z.object({
   updatedAt: z.string(),
 }).strict()
 export type DisbursementDto = z.infer<typeof disbursementDtoSchema>
+
+export const disbursementPreviewDtoSchema = z.object({
+  refId: z.string(),
+  programId: z.string().nullable(),
+  periodId: z.number().int().nullable(),
+  commitment: z.string().nullable(),
+  amount: z.number().int().nonnegative().nullable(),
+}).strict()
+export type DisbursementPreviewDto = z.infer<typeof disbursementPreviewDtoSchema>
+
+export const disbursementCreatedDtoSchema = disbursementDtoSchema.extend({
+  preview: disbursementPreviewDtoSchema,
+  deleted: z.boolean().optional(),
+}).strict()
+export type DisbursementCreatedDto = z.infer<typeof disbursementCreatedDtoSchema>
 
 // 7. AuditLogDto
 export const auditLogDtoSchema = z.object({
@@ -252,6 +306,21 @@ export const networkStatusDtoSchema = z.object({
 export type NetworkStatusDto = z.infer<typeof networkStatusDtoSchema>
 
 // 11. DashboardSummaryDto
+export const dashboardMonthlyItemDtoSchema = z.object({
+  periodId: z.number().int(),
+  count: z.number().int().nonnegative(),
+  amount: z.number().int().nonnegative(),
+}).strict()
+export type DashboardMonthlyItemDto = z.infer<typeof dashboardMonthlyItemDtoSchema>
+
+export const dashboardByProgramItemDtoSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  count: z.number().int().nonnegative(),
+  amount: z.number().int().nonnegative(),
+}).strict()
+export type DashboardByProgramItemDto = z.infer<typeof dashboardByProgramItemDtoSchema>
+
 export const dashboardSummaryDtoSchema = z.object({
   activePrograms: z.number().int().nonnegative(),
   finalRecipients: z.number().int().nonnegative(),
@@ -263,6 +332,8 @@ export const dashboardSummaryDtoSchema = z.object({
   percentage: z.number(),
   pending: z.number().int().nonnegative(),
   failed: z.number().int().nonnegative(),
+  monthly: z.array(dashboardMonthlyItemDtoSchema),
+  byProgram: z.array(dashboardByProgramItemDtoSchema),
   network: networkStatusDtoSchema,
   recentTransactions: z.array(z.object({
     id: z.string(),

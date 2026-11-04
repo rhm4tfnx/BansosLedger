@@ -70,6 +70,21 @@ export function toDashboardSummaryDto(data: any): DashboardSummaryDto {
     percentage: Number(data.percentage ?? 0),
     pending: Number(data.pending ?? 0),
     failed: Number(data.failed ?? 0),
+    monthly: Array.isArray(data.monthly)
+      ? data.monthly.map((item: any) => ({
+          periodId: Number(item.periodId ?? 0),
+          count: Number(item.count ?? 0),
+          amount: Math.round(Number(item.amount ?? 0)),
+        }))
+      : [],
+    byProgram: Array.isArray(data.byProgram)
+      ? data.byProgram.map((item: any) => ({
+          code: String(item.code ?? ''),
+          name: String(item.name ?? ''),
+          count: Number(item.count ?? 0),
+          amount: Math.round(Number(item.amount ?? 0)),
+        }))
+      : [],
     network: toNetworkStatusDto(data.network),
     recentTransactions: Array.isArray(data.recentTransactions)
       ? data.recentTransactions.map((tx: any) => ({

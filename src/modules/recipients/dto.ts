@@ -14,6 +14,12 @@ export function toRecipientDto(doc: any): RecipientDto {
     phone: doc.phone ? String(doc.phone) : null,
     status: doc.status,
     commitment: doc.commitment ? String(doc.commitment) : null,
+    enrollments: Array.isArray(doc.enrollments)
+      ? doc.enrollments.map((item: any) => ({
+          programCode: String(item.programCode ?? ''),
+          status: item.status,
+        }))
+      : [],
     createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt ?? new Date().toISOString()),
     updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : String(doc.updatedAt ?? new Date().toISOString()),
     finalizedAt: doc.finalizedAt ? (doc.finalizedAt instanceof Date ? doc.finalizedAt.toISOString() : String(doc.finalizedAt)) : null,

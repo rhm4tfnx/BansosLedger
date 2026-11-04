@@ -46,16 +46,86 @@ export async function exportCSV(ctx: DomainContext) {
   await audit(ctx, 'REPORT_EXPORTED', 'reports', 'realization', { filters: result.filters, page: result.page, limit: result.limit })
   return new Response('\uFEFF' + lines.join('\r\n') + '\r\n', { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="realisasi.csv"', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } })
 }
+const witaYearMonthFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Makassar',
+  year: 'numeric',
+  month: '2-digit',
+})
+
+export function buildLast12Periods(now: Date = new Date()): number[] {
+  const parts = witaYearMonthFormatter.formatToParts(now)
+  const year = Number(parts.find(part => part.type === 'year')?.value)
+  const month = Number(parts.find(part => part.type === 'month')?.value)
+  const currentTotalMonths = year * 12 + (month - 1)
+  const periods: number[] = []
+  for (let offset = 11; offset >= 0; offset--) {
+    const total = currentTotalMonths - offset
+    const y = Math.floor(total / 12)
+    const m = (total % 12) + 1
+    periods.push(y * 100 + m)
+  }
+  return periods
+}
+
 export async function dashboard(_ctx: DomainContext) {
-  const [activePrograms, finalRecipients, programTotals, totals, pending, failed, recentTransactions, network] = await Promise.all([
-    Programs.countDocuments({ status: 'ACTIVE' }), Recipients.countDocuments({ status: 'FINAL', deletedAt: null }),
+  const periods = buildLast12Periods(new Date())
+  const [activePrograms, finalRecipients, programTotals, totals, pending, failed, monthlyRows, byProgram, recentTransactions, network] = await Promise.all([
+    Programs.countDocuments({ status: 'ACTIVE' }),
+    Recipients.countDocuments({ status: 'FINAL', deletedAt: null }),
     Programs.aggregate<{ pagu: number }>([{ $group: { _id: null, pagu: { $sum: '$totalBudget' } } }]),
     Disbursements.aggregate<{ count: number; rupiah: number }>([{ $match: { status: 'SUCCESS', deletedAt: null } }, { $group: { _id: null, count: { $sum: 1 }, rupiah: { $sum: '$amount' } } }]),
-    Disbursements.countDocuments({ status: 'PENDING', deletedAt: null }), Disbursements.countDocuments({ status: 'FAILED', deletedAt: null }),
-    Disbursements.find({ deletedAt: null, status: { $in: ['PENDING', 'SUCCESS', 'FAILED'] } }).select('refId programId periodId amount status chain createdAt updatedAt').sort({ updatedAt: -1, _id: -1 }).limit(10).lean(), networkStatus(),
+    Disbursements.countDocuments({ status: 'PENDING', deletedAt: null }),
+    Disbursements.countDocuments({ status: 'FAILED', deletedAt: null }),
+    Disbursements.aggregate<{ _id: number; count: number; amount: number }>([
+      { $match: { status: 'SUCCESS', deletedAt: null, periodId: { $in: periods } } },
+      { $group: { _id: '$periodId', count: { $sum: 1 }, amount: { $sum: '$amount' } } },
+    ]),
+    Programs.aggregate<{ code: string; name: string; count: number; amount: number }>([
+      { $sort: { code: 1 } },
+      {
+        $lookup: {
+          from: 'disbursements',
+          let: { progId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$programId', '$$progId'] },
+                status: 'SUCCESS',
+                deletedAt: null,
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                count: { $sum: 1 },
+                amount: { $sum: '$amount' },
+              },
+            },
+          ],
+          as: '_stats',
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          code: 1,
+          name: 1,
+          count: { $ifNull: [{ $arrayElemAt: ['$_stats.count', 0] }, 0] },
+          amount: { $ifNull: [{ $arrayElemAt: ['$_stats.amount', 0] }, 0] },
+        },
+      },
+    ]),
+    Disbursements.find({ deletedAt: null, status: { $in: ['PENDING', 'SUCCESS', 'FAILED'] } }).select('refId programId periodId amount status chain createdAt updatedAt').sort({ updatedAt: -1, _id: -1 }).limit(10).lean(),
+    networkStatus(),
   ])
+  const monthlyMap = new Map(monthlyRows.map(item => [item._id, { count: item.count, amount: item.amount }]))
+  const monthly = periods.map(periodId => ({
+    periodId,
+    count: monthlyMap.get(periodId)?.count ?? 0,
+    amount: monthlyMap.get(periodId)?.amount ?? 0,
+  }))
   const pagu = programTotals[0]?.pagu ?? 0, realisasi = totals[0] ? { count: totals[0].count, rupiah: totals[0].rupiah } : { count: 0, rupiah: 0 }
-  return json(toDashboardSummaryDto({ activePrograms, finalRecipients, pagu, realisasi, percentage: pagu ? realisasi.rupiah / pagu * 100 : 0, pending, failed, network, recentTransactions }))
+  return json(toDashboardSummaryDto({ activePrograms, finalRecipients, pagu, realisasi, percentage: pagu ? realisasi.rupiah / pagu * 100 : 0, pending, failed, monthly, byProgram, network, recentTransactions }))
 }
 export async function wallet(ctx: DomainContext) {
   return json(toWalletStatusDto({ ...await chainVerifier.walletStatus(), boundWallet: ctx.actor.role === 'OPERATOR_KELURAHAN' ? ctx.actor.boundWalletAddress ?? null : null }))

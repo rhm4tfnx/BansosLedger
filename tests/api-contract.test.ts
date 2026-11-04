@@ -14,7 +14,9 @@ import * as explorerService from '@/modules/explorer/service'
 import {
   recipientDtoSchema,
   programDtoSchema,
+  programEnrollmentItemDtoSchema,
   disbursementDtoSchema,
+  disbursementCreatedDtoSchema,
   evidenceDtoSchema,
   auditLogDtoSchema,
   realizationReportDtoSchema,
@@ -80,7 +82,7 @@ import { GET as getProgram, PATCH as updateProgram } from '@/app/api/v1/programs
 import { POST as activateProgram } from '@/app/api/v1/programs/[id]/activate-intent/route'
 import { POST as chainConfirmProgramRoute } from '@/app/api/v1/programs/[id]/chain-confirm/route'
 import { POST as closeProgram } from '@/app/api/v1/programs/[id]/close-intent/route'
-import { POST as enrollRecipients } from '@/app/api/v1/programs/[id]/enrollments/route'
+import { GET as listProgramEnrollments, POST as enrollRecipients } from '@/app/api/v1/programs/[id]/enrollments/route'
 import { POST as registerIntent } from '@/app/api/v1/programs/[id]/register-intent/route'
 import { GET as publicProgramsRoute } from '@/app/api/v1/public/programs/route'
 import { GET as publicProgramRoute } from '@/app/api/v1/public/programs/[code]/route'
@@ -277,6 +279,70 @@ describe('API Contract V1 - Route Responses Match Zod DTO Schemas', () => {
     expect(activateIntentRes.status).toBe(200)
     const activateData = await activateIntentRes.json()
     expect(z.object({ to: z.string(), chainId: z.number(), data: z.string() }).parse(activateData)).toEqual(activateData)
+
+    // GET /api/v1/programs/:id/enrollments
+    const enrollListRes = await listProgramEnrollments(req(undefined, 'GET', `/api/v1/programs/${progId}/enrollments`), { params: Promise.resolve({ id: progId }) })
+    expect(enrollListRes.status).toBe(200)
+    const enrollListData = await enrollListRes.json()
+    expect(listEnvelope(programEnrollmentItemDtoSchema).parse(enrollListData)).toEqual(enrollListData)
+  })
+
+  test('Disbursements create, list and detail routes return enriched DTOs', async () => {
+    const prog = await Programs.create({
+      code: 'DISB-2026',
+      programId: '0x' + 'd'.repeat(64),
+      name: 'Program Penyaluran 2026',
+      fundSource: 'APBD',
+      kind: 'TUNAI',
+      amountPerRecipient: 600000,
+      totalBudget: 6000000,
+      startPeriod: 202601,
+      endPeriod: 202612,
+      status: 'ACTIVE',
+      isPublic: true,
+    })
+    const rec = await Recipients.create({
+      nikEnc: encryptNik(nik),
+      nikBlindIndex: nikBlindIndex(nik),
+      nikMasked: '7305••••••••0001',
+      name: 'Penerima Bantuan',
+      address: { dusun: 'Dusun II', rt: '02', rw: '01' },
+      status: 'FINAL',
+      commitment: recipientCommitment(nik),
+    })
+    await Enrollments.create({
+      programId: prog._id,
+      recipientId: rec._id,
+      status: 'REGISTERED_ONCHAIN',
+    })
+
+    // POST /api/v1/disbursements
+    const createRes = await createDisbursement(req({
+      programId: String(prog._id),
+      recipientId: String(rec._id),
+      period: 202602,
+      disbursedDate: '2026-02-15',
+      note: 'Tahap Februari',
+    }, 'POST', '/api/v1/disbursements'))
+    expect(createRes.status).toBe(201)
+    const created = await createRes.json()
+    expect(disbursementCreatedDtoSchema.parse(created)).toEqual(created)
+    expect(created.program).toEqual({ id: String(prog._id), code: 'DISB-2026', name: 'Program Penyaluran 2026' })
+    expect(created.recipient).toEqual({ id: String(rec._id), name: 'Penerima Bantuan', nikMasked: '7305••••••••0001' })
+
+    // GET /api/v1/disbursements
+    const listRes = await listDisbursements(req(undefined, 'GET', '/api/v1/disbursements'))
+    expect(listRes.status).toBe(200)
+    const listData = await listRes.json()
+    expect(listEnvelope(disbursementDtoSchema).parse(listData)).toEqual(listData)
+    expect(listData.data[0].program.code).toBe('DISB-2026')
+    expect(listData.data[0].recipient.name).toBe('Penerima Bantuan')
+
+    // GET /api/v1/disbursements/:id
+    const detailRes = await getDisbursement(req(undefined, 'GET', `/api/v1/disbursements/${created.id}`), { params: Promise.resolve({ id: created.id }) })
+    expect(detailRes.status).toBe(200)
+    const detailData = await detailRes.json()
+    expect(disbursementDtoSchema.parse(detailData)).toEqual(detailData)
   })
 
   test('Reports & Dashboard return valid DTOs', async () => {

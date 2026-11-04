@@ -1,8 +1,8 @@
 import 'server-only'
 import { z } from 'zod'
 import { createHash } from 'node:crypto'
-import type { FilterQuery } from 'mongoose'
-import { Recipients, Enrollments, Disbursements, RateLimits } from '@/lib/db/models'
+import type { FilterQuery, PipelineStage } from 'mongoose'
+import { Recipients, Disbursements, RateLimits } from '@/lib/db/models'
 import { encryptNik, decryptNik, nikBlindIndex, maskNik, validateNik, type EncryptedNik } from '@/lib/crypto/nik'
 import { recipientCommitment } from '@/lib/blockchain/identity-hash'
 import { toRecipientDto } from './dto'
@@ -12,18 +12,135 @@ export const recipientInput = z.object({ nik: z.string().refine(validateNik), na
 export const recipientProjection = '_id nikMasked name address phone status commitment createdAt updatedAt finalizedAt'
 function encryptedFields(nik: string) { return { nikEnc: encryptNik(nik), nikBlindIndex: nikBlindIndex(nik), nikMasked: maskNik(nik) } }
 function duplicateNik(error: unknown): never { if (duplicate(error)) throw new DomainError(409, 'DUPLICATE_NIK', 'NIK sudah terdaftar'); throw error }
+function recipientEnrichmentStages(): PipelineStage.FacetPipelineStage[] {
+  return [
+    {
+      $lookup: {
+        from: 'enrollments',
+        localField: '_id',
+        foreignField: 'recipientId',
+        pipeline: [
+          { $sort: { createdAt: 1, _id: 1 } },
+          {
+            $lookup: {
+              from: 'programs',
+              localField: 'programId',
+              foreignField: '_id',
+              pipeline: [{ $project: { _id: 0, code: 1 } }],
+              as: '_program',
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              programCode: { $ifNull: [{ $arrayElemAt: ['$_program.code', 0] }, ''] },
+              status: 1,
+            },
+          },
+        ],
+        as: 'enrollments',
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        nikMasked: 1,
+        name: 1,
+        address: 1,
+        phone: 1,
+        status: 1,
+        commitment: 1,
+        enrollments: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        finalizedAt: 1,
+      },
+    },
+  ]
+}
 export async function list(ctx: DomainContext) {
   const paging = pageQuery(ctx.request, ['createdAt', 'updatedAt', 'name', 'status'])
-  const input = z.object({ search: z.string().trim().max(160).optional(), status: z.enum(['DRAFT', 'FINAL']).optional(), program: idSchema.optional(), dusun: z.string().max(100).optional(), rt: z.string().regex(/^\d{1,3}$/).optional(), rw: z.string().regex(/^\d{1,3}$/).optional() }).parse(query(ctx.request))
+  const input = z.object({
+    search: z.string().trim().max(160).optional(),
+    status: z.enum(['DRAFT', 'FINAL']).optional(),
+    programId: idSchema.optional(),
+    program: idSchema.optional(),
+    notEnrolledIn: idSchema.optional(),
+    dusun: z.string().max(100).optional(),
+    rt: z.string().regex(/^\d{1,3}$/).optional(),
+    rw: z.string().regex(/^\d{1,3}$/).optional(),
+  }).parse(query(ctx.request))
   const filter: FilterQuery<unknown> = { deletedAt: null }
   if (input.status) filter.status = input.status
   for (const field of ['dusun', 'rt', 'rw'] as const) if (input[field]) filter[`address.${field}`] = input[field]
   if (input.search) {
-    if (/^\d{16}$/.test(input.search)) { if (!validateNik(input.search)) return json({ data: [], total: 0, page: paging.page, limit: paging.limit }); filter.nikBlindIndex = nikBlindIndex(input.search) }
-    else filter.name = { $regex: escapeSearch(input.search), $options: 'i' }
+    if (/^\d{16}$/.test(input.search)) {
+      if (!validateNik(input.search)) return json({ data: [], total: 0, page: paging.page, limit: paging.limit, totalPages: 0 })
+      filter.nikBlindIndex = nikBlindIndex(input.search)
+    } else filter.name = { $regex: escapeSearch(input.search), $options: 'i' }
   }
-  if (input.program) filter._id = { $in: await Enrollments.find({ programId: oid(input.program) }).distinct('recipientId') }
-  const [data, total] = await Promise.all([Recipients.find(filter).select(recipientProjection).sort(paging.sort).skip(paging.skip).limit(paging.limit).lean(), Recipients.countDocuments(filter)])
+  const effectiveProgramId = input.programId ?? input.program
+  const preFilterStages: PipelineStage[] = [{ $match: filter }]
+  if (effectiveProgramId) {
+    preFilterStages.push(
+      {
+        $lookup: {
+          from: 'enrollments',
+          let: { recId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$recipientId', '$$recId'] },
+                programId: oid(effectiveProgramId),
+              },
+            },
+            { $limit: 1 },
+            { $project: { _id: 1 } },
+          ],
+          as: '_inProgram',
+        },
+      },
+      { $match: { '_inProgram.0': { $exists: true } } },
+    )
+  }
+  if (input.notEnrolledIn) {
+    preFilterStages.push(
+      {
+        $lookup: {
+          from: 'enrollments',
+          let: { recId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$recipientId', '$$recId'] },
+                programId: oid(input.notEnrolledIn),
+              },
+            },
+            { $limit: 1 },
+            { $project: { _id: 1 } },
+          ],
+          as: '_excludedProgram',
+        },
+      },
+      { $match: { '_excludedProgram.0': { $exists: false } } },
+    )
+  }
+  const [agg] = await Recipients.aggregate<{ data: unknown[]; total: { count: number }[] }>([
+    ...preFilterStages,
+    {
+      $facet: {
+        data: [
+          { $sort: paging.sort },
+          { $skip: paging.skip },
+          { $limit: paging.limit },
+          ...recipientEnrichmentStages(),
+        ],
+        total: [{ $count: 'count' }],
+      },
+    },
+  ])
+  const data = agg?.data ?? []
+  const total = agg?.total[0]?.count ?? 0
   return json({ data: data.map(toRecipientDto), total, page: paging.page, limit: paging.limit, totalPages: Math.ceil(total / paging.limit) })
 }
 export async function create(ctx: DomainContext) {
@@ -35,7 +152,11 @@ export async function create(ctx: DomainContext) {
   return json(toRecipientDto(created), 201)
 }
 export async function detail(ctx: DomainContext) {
-  const row = await Recipients.findOne({ _id: oid(ctx.params.id), deletedAt: null }).select(recipientProjection).lean()
+  const [row] = await Recipients.aggregate([
+    { $match: { _id: oid(ctx.params.id), deletedAt: null } },
+    { $limit: 1 },
+    ...recipientEnrichmentStages(),
+  ])
   if (!row) notFound()
   const paging = pageQuery(ctx.request, ['createdAt', 'periodId', 'amount'])
   const filter = { recipientId: row._id, deletedAt: null }
