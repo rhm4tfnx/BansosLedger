@@ -8,7 +8,6 @@ import {
   UserCheck,
   FilePenLine,
   Plus,
-  Upload,
   Search,
   Eye,
   EyeOff,
@@ -37,7 +36,6 @@ import type { RecipientStatus } from '@/lib/api-contract'
 import type { RecipientViewModel } from '@/types'
 import { RecipientDialog } from '@/components/features/dashboard/recipients/recipient-dialog'
 import { RecipientForm } from '@/components/features/dashboard/recipients/recipient-form'
-import { RecipientImport } from '@/components/features/dashboard/recipients/recipient-import'
 import {
   EmptyState,
   ErrorState,
@@ -47,7 +45,6 @@ import {
 import { HashLink } from '@/components/features/dashboard/shared/hash-link'
 import s from '@/components/features/dashboard/recipients/recipients.module.css'
 
-const ENABLE_CSV_IMPORT = process.env.NEXT_PUBLIC_ENABLE_CSV_IMPORT === 'true'
 const REVEAL_TTL_MS = 30_000
 
 type StatusTab = '' | RecipientStatus
@@ -108,7 +105,6 @@ function RecipientsContent() {
   const [formState, setFormState] = useState<
     { mode: 'create' } | { mode: 'edit'; recipient: RecipientViewModel } | null
   >(null)
-  const [showCsvImport, setShowCsvImport] = useState(false)
   const [finalizeTarget, setFinalizeTarget] = useState<RecipientViewModel | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<RecipientViewModel | null>(null)
   const [revealedNiks, setRevealedNiks] = useState<Record<string, string>>({})
@@ -273,20 +269,13 @@ function RecipientsContent() {
           </div>
           <div className={s.actions}>
             {can('recipient:create') && (
-              <>
-                {ENABLE_CSV_IMPORT && (
-                  <button type="button" onClick={() => setShowCsvImport(true)}>
-                    <Upload size={16} /> Impor CSV
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className={s.primary}
-                  onClick={() => setFormState({ mode: 'create' })}
-                >
-                  <Plus size={18} /> Tambah Penerima
-                </button>
-              </>
+              <button
+                type="button"
+                className={s.primary}
+                onClick={() => setFormState({ mode: 'create' })}
+              >
+                <Plus size={18} /> Tambah Penerima
+              </button>
             )}
           </div>
         </header>
@@ -610,7 +599,6 @@ function RecipientsContent() {
           onClose={() => setFormState(null)}
         />
       )}
-      {showCsvImport && <RecipientImport onClose={() => setShowCsvImport(false)} />}
       {finalizeTarget && (
         <FinalizeRecipientDialog
           recipient={finalizeTarget}

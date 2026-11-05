@@ -16,10 +16,13 @@ interface RoleAccessContextValue {
 const RoleAccessContext = createContext<RoleAccessContextValue | null>(null)
 
 export function isDevRolePreviewEnabled(): boolean {
-  return (
-    process.env.NODE_ENV === 'development' &&
-    process.env.NEXT_PUBLIC_ENABLE_UI_ROLE_PREVIEW === 'true'
-  )
+  if (process.env.NODE_ENV !== 'production') {
+    return (
+      process.env.NODE_ENV === 'development' &&
+      process.env.NEXT_PUBLIC_ENABLE_UI_ROLE_PREVIEW === 'true'
+    )
+  }
+  return false
 }
 
 export function RoleAccessProvider({

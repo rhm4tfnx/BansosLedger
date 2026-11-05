@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import Link from 'next/link'
@@ -71,7 +71,7 @@ function DashboardFrame({
   initialMustChangePassword: boolean
 }) {
   const { role, session, meta, can, canAccessRoute, isAuthenticated, isReadOnly, setPreviewRole } = useRoleAccess()
-  const previewEnabled = isDevRolePreviewEnabled() && isAuthenticated
+  const previewEnabled = process.env.NODE_ENV !== 'production' && isDevRolePreviewEnabled() && isAuthenticated
   const effectiveWalletVerified = session ? session.walletVerified : walletVerified
   const router = useRouter()
   const logoutMutation = useLogoutMutation()

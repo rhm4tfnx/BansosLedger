@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Mona_Sans, Geist_Mono } from 'next/font/google'
+import { headers } from 'next/headers'
 import { QueryProvider } from '@/components/providers/query-provider'
 import '@/styles/globals.css'
 
@@ -36,16 +37,18 @@ export const viewport: Viewport = {
   themeColor: '#e9edec',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined
+
   return (
-    <html lang="id">
+    <html lang="id" data-nonce={nonce ? 'present' : undefined}>
       <body className={`${monaSans.variable} ${monoSpace.variable} antialiased`}>
         <QueryProvider>{children}</QueryProvider>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        {process.env.NODE_ENV === 'production' && process.env.VERCEL === '1' && <Analytics />}
       </body>
     </html>
   )

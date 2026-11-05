@@ -6,9 +6,24 @@ pmOnFail: ignore
 minimumReleaseAgeExclude:
   - '@next/*'
   - next
+  - fast-uri
+  - ip-address
+  - nanoid
+  - source-map-js
+  - browserslist
+
+overrides:
+  fast-uri: '>=3.1.7'
+  ip-address: '>=10.3.1'
+  nanoid: '>=3.3.18'
+  source-map-js: '>=1.2.2'
+  browserslist: '>=4.28.7'
+  zod: '>=4.6.6'
 
 allowBuilds:
   esbuild: true
-  keccak: set this to true or false
-  mongodb-memory-server: set this to true or false
-  secp256k1: set this to true or false
+  keccak: false
+  mongodb-memory-server: false
+  secp256k1: false
+  sharp: false
+  unrs-resolver: false

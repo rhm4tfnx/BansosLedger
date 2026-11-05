@@ -1,18 +1,3 @@
-/**
- * @deprecated Legacy mock shape retained until Explorer pages are migrated in Integration C.
- * Non-PRD fields (`uptime`, `signed`, `reputation`) are omitted from ExplorerValidatorViewModel.
- */
-export interface ExplorerAddress {
-  name: string
-  address: string
-  type: string
-  role: string
-  uptime: string
-  signed: number
-  reputation: number
-  lastBlock: number
-}
-
 export interface ExplorerEventViewModel {
   refId: string
   programId: string

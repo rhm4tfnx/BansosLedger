@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-and-build:
+    name: Typecheck, Lint, Tests, Contracts, Build & Audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MONGOMS_DISTRO: ubuntu-22.04
+      NEXT_PUBLIC_CHAIN_ID: '250204'
+      NEXT_PUBLIC_RPC_URL: 'http://127.0.0.1:8545'
+      INTERNAL_API_URL: 'http://127.0.0.1:3000'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run TypeScript typecheck
+        run: pnpm typecheck
+
+      - name: Run linter
+        run: pnpm lint
+
+      - name: Run unit, component, foundation, and domain tests
+        run: pnpm test:all
+
+      - name: Compile smart contracts
+        run: pnpm --filter @bansos/contracts compile
+
+      - name: Test smart contracts
+        run: pnpm --filter @bansos/contracts test
+
+      - name: Smart contract coverage
+        run: pnpm --filter @bansos/contracts coverage
+
+      - name: Smart contract gas report
+        run: pnpm --filter @bansos/contracts gas
+
+      - name: Build Next.js standalone production bundle
+        run: pnpm build
+
+      - name: Production dependency security audit (fail on high)
+        run: pnpm audit --prod --audit-level high
+
+      - name: Upload contract coverage & gas report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contracts-coverage-and-gas-reports
+          path: |
+            packages/contracts/coverage/
+            packages/contracts/coverage.json
+            packages/contracts/reports/
+            packages/contracts/gas-report.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  e2e-and-lighthouse:
+    name: E2E Playwright, Accessibility (axe-core) & Lighthouse CI
+    needs: quality-and-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      MONGOMS_DISTRO: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Compile smart contracts for local Hardhat E2E node
+        run: pnpm --filter @bansos/contracts compile
+
+      - name: Run Playwright E2E, CSP & WCAG 2.2 AA accessibility suite
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
