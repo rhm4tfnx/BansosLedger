@@ -112,6 +112,7 @@ function ProgramsContent() {
     setParamsRef.current = params.set
   })
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const detailSectionRef = useRef<HTMLElement>(null)
   useEffect(() => () => clearTimeout(timer.current), [])
 
   const list = useProgramsQuery({
@@ -142,9 +143,12 @@ function ProgramsContent() {
   const tabCount = (value: StatusTab) =>
     overview.isSuccess ? String(value ? count(value) : overviewItems.length) : '…'
 
-  function selectProgram(id: string) {
+  function selectProgram(id: string, scrollToDetail = false) {
     setSelectedId(id)
     params.set({ enrollPage: null, enrollStatus: null }, false)
+    if (scrollToDetail && typeof detailSectionRef.current?.scrollIntoView === 'function') {
+      detailSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
   }
 
   function exportCsv() {
@@ -433,7 +437,7 @@ function ProgramsContent() {
                         <button
                           type="button"
                           className={s.programLink}
-                          onClick={() => selectProgram(p.id)}
+                          onClick={() => selectProgram(p.id, true)}
                         >
                           <small>
                             {p.code} · #{p.programIdShort}
@@ -484,7 +488,7 @@ function ProgramsContent() {
                       </td>
                       <td>
                         <div className={s.rowActions}>
-                          <button type="button" onClick={() => selectProgram(p.id)}>
+                          <button type="button" onClick={() => selectProgram(p.id, true)}>
                             Detail
                           </button>
                           {can('program:update') && p.status === 'DRAFT' && (
@@ -564,7 +568,12 @@ function ProgramsContent() {
           )}
           <p className={s.tableFooter}>Tidak tersedia hard delete</p>
         </section>
-        <aside className={s.card}>
+        <section
+          ref={detailSectionRef}
+          id="detail-program"
+          aria-label="Detail program"
+          className={`${s.card} ${s.detailSection}`}
+        >
           {!effectiveId ? (
             <EmptyState>Pilih program untuk melihat detail.</EmptyState>
           ) : detail.isPending ? (
@@ -573,7 +582,7 @@ function ProgramsContent() {
             <ErrorState error={detail.error} onRetry={() => void detail.refetch()} />
           ) : selected ? (
             <>
-              <header>
+              <header className={s.detailHeader}>
                 <div>
                   <small className={s.accent}>DETAIL PROGRAM</small>
                   <h2>{selected.name}</h2>
@@ -581,101 +590,126 @@ function ProgramsContent() {
                     #{selected.programIdShort} · {selected.periodRangeLabel}
                   </p>
                 </div>
-                <span className={s.badge}>{selected.statusLabel}</span>
+                <span
+                  className={`${s.badge} ${selected.status === 'ACTIVE' ? s.green : selected.status === 'DRAFT' ? s.amber : ''}`}
+                >
+                  {selected.statusLabel}
+                </span>
               </header>
-              {selected.description && (
-                <p>
-                  <strong>Deskripsi:</strong> {selected.description}
-                </p>
-              )}
-              {selected.createTxHash && (
-                <p className={s.criteria}>
-                  Transaksi aktivasi:{' '}
-                  <HashLink hash={selected.createTxHash} short={selected.createTxHashShort} />
-                </p>
-              )}
-              <p>
-                Sumber dana: {selected.fundSource} · Kode: {selected.code}
-              </p>
-              <div className={s.inset}>
-                <h3>Ringkasan Realisasi</h3>
-                <small>
-                  <LockKeyhole size={12} /> Nominal {selected.amountPerRecipientFormatted} / KPM
-                  terkunci otomatis · {selected.kindLabel}
-                </small>
-                <dl>
-                  {[
-                    ['Pagu', selected.summary.paguFormatted],
-                    [
-                      'Realisasi',
-                      `${selected.summary.realisasiFormatted} (${selected.summary.realisasiCount} KPM)`,
-                    ],
-                    ['Sisa pagu', selected.summary.sisaFormatted],
-                    ['Target penerima', `${selected.summary.target} KPM`],
-                    ['Persentase', `${selected.summary.percentage}%`],
-                    ['Teregistrasi on-chain', `${selected.registeredCount} KPM`],
-                  ].map(([key, value]) => (
-                    <div key={key}>
-                      <dt>{key}</dt>
-                      <dd>{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-              <h3>Penerima Terdaftar</h3>
-              <div className={s.tabs} role="group" aria-label="Filter status pendaftaran">
-                {enrollmentTabs.map((t) => (
-                  <button
-                    type="button"
-                    key={t.value || 'all'}
-                    aria-pressed={enrollStatus === t.value}
-                    onClick={() => params.set({ enrollStatus: t.value, enrollPage: null }, false)}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              {enrollments.isPending ? (
-                <TableSkeleton label="Memuat penerima terdaftar" rows={4} />
-              ) : enrollments.isError ? (
-                <ErrorState error={enrollments.error} onRetry={() => void enrollments.refetch()} />
-              ) : !enrollments.data.items.length ? (
-                <EmptyState>Belum ada penerima terdaftar pada program ini.</EmptyState>
-              ) : (
-                <div className={s.tableWrap}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Penerima</th>
-                        <th>NIK</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {enrollments.data.items.map((e) => (
-                        <tr key={e.id}>
-                          <td>{e.recipientName}</td>
-                          <td>
-                            <code>{e.recipientNikMasked}</code>
-                          </td>
-                          <td>{e.statusLabel}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <div className={s.detailGrid}>
+                <div className={s.detailMeta}>
+                  {selected.description && (
+                    <p>
+                      <strong>Deskripsi:</strong> {selected.description}
+                    </p>
+                  )}
+                  {selected.createTxHash && (
+                    <p className={s.detailTxRow}>
+                      Transaksi aktivasi:{' '}
+                      <HashLink hash={selected.createTxHash} short={selected.createTxHashShort} />
+                    </p>
+                  )}
+                  <p>
+                    Sumber dana: {selected.fundSource} · Kode: {selected.code}
+                  </p>
                 </div>
-              )}
-              {enrollments.data && (
-                <Pager
-                  page={enrollments.data.page}
-                  totalPages={enrollments.data.totalPages}
-                  total={enrollments.data.total}
-                  onPage={(next) => params.set({ enrollPage: next }, false)}
-                />
-              )}
+                <div className={`${s.inset} ${s.detailSummary}`}>
+                  <h3>Ringkasan Realisasi</h3>
+                  <small className={s.lock}>
+                    <LockKeyhole size={12} /> Nominal {selected.amountPerRecipientFormatted} / KPM
+                    terkunci otomatis · {selected.kindLabel}
+                  </small>
+                  <dl className={s.summaryGrid}>
+                    {[
+                      ['Pagu', selected.summary.paguFormatted],
+                      [
+                        'Realisasi',
+                        `${selected.summary.realisasiFormatted} (${selected.summary.realisasiCount} KPM)`,
+                      ],
+                      ['Sisa pagu', selected.summary.sisaFormatted],
+                      ['Target penerima', `${selected.summary.target} KPM`],
+                      ['Persentase', `${selected.summary.percentage}%`],
+                      ['Teregistrasi on-chain', `${selected.registeredCount} KPM`],
+                    ].map(([key, value]) => (
+                      <div key={key}>
+                        <dt>{key}</dt>
+                        <dd>{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </div>
+              <div className={s.detailEnrollments}>
+                <div className={s.detailEnrollmentsHeader}>
+                  <h3>Penerima Terdaftar</h3>
+                  <div className={s.tabs} role="group" aria-label="Filter status pendaftaran">
+                    {enrollmentTabs.map((t) => (
+                      <button
+                        type="button"
+                        key={t.value || 'all'}
+                        aria-pressed={enrollStatus === t.value}
+                        onClick={() =>
+                          params.set({ enrollStatus: t.value, enrollPage: null }, false)
+                        }
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {enrollments.isPending ? (
+                  <TableSkeleton label="Memuat penerima terdaftar" rows={4} />
+                ) : enrollments.isError ? (
+                  <ErrorState
+                    error={enrollments.error}
+                    onRetry={() => void enrollments.refetch()}
+                  />
+                ) : !enrollments.data.items.length ? (
+                  <EmptyState>Belum ada penerima terdaftar pada program ini.</EmptyState>
+                ) : (
+                  <div className={`${s.tableWrap} ${s.enrollmentTableWrap}`}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Penerima</th>
+                          <th>NIK</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {enrollments.data.items.map((e) => (
+                          <tr key={e.id}>
+                            <td>
+                              <strong>{e.recipientName}</strong>
+                            </td>
+                            <td>
+                              <code>{e.recipientNikMasked}</code>
+                            </td>
+                            <td>
+                              <span
+                                className={`${s.badge} ${e.status === 'REGISTERED_ONCHAIN' ? s.green : ''}`}
+                              >
+                                {e.statusLabel}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {enrollments.data && (
+                  <Pager
+                    page={enrollments.data.page}
+                    totalPages={enrollments.data.totalPages}
+                    total={enrollments.data.total}
+                    onPage={(next) => params.set({ enrollPage: next }, false)}
+                  />
+                )}
+              </div>
             </>
           ) : null}
-        </aside>
+        </section>
       </div>
       {formState && (
         <ProgramForm

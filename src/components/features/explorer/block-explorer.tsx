@@ -106,16 +106,16 @@ export function BlockExplorer() {
               BLOCK EXPLORER
             </span>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-3">
             <Link
               href="/transparansi"
-              className="inline-flex min-h-11 items-center gap-2 font-mono text-xs text-primary hover:underline"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border bg-white px-3.5 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
             >
               Ringkasan publik
             </Link>
             <Link
               href="/"
-              className="inline-flex min-h-11 items-center gap-2 font-mono text-xs text-primary hover:underline"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border bg-white px-3.5 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
             >
               <ArrowLeft size={14} />
               Home
@@ -169,17 +169,32 @@ export function BlockExplorer() {
                 {searchError}
               </p>
             )}
-            <nav className="mt-3 flex flex-wrap gap-4 text-xs text-primary">
-              <Link href="/cara-verifikasi" className="inline-flex min-h-11 items-center hover:underline">
+            <nav
+              aria-label="Tautan cepat explorer"
+              className="mt-3 flex flex-wrap items-center gap-2.5 text-xs text-primary sm:gap-3"
+            >
+              <Link
+                href="/cara-verifikasi"
+                className="inline-flex min-h-11 items-center justify-center rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary/60"
+              >
                 Cara memeriksa transaksi
               </Link>
-              <Link href="/explorer/contract" className="inline-flex min-h-11 items-center hover:underline">
+              <Link
+                href="/explorer/contract"
+                className="inline-flex min-h-11 items-center justify-center rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary/60"
+              >
                 Kontrak
               </Link>
-              <Link href="/explorer/validator" className="inline-flex min-h-11 items-center hover:underline">
+              <Link
+                href="/explorer/validator"
+                className="inline-flex min-h-11 items-center justify-center rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary/60"
+              >
                 Validator
               </Link>
-              <Link href="/transparansi" className="inline-flex min-h-11 items-center hover:underline">
+              <Link
+                href="/transparansi"
+                className="inline-flex min-h-11 items-center justify-center rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary/60"
+              >
                 Ringkasan publik
               </Link>
             </nav>

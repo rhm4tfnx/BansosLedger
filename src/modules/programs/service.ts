@@ -260,7 +260,20 @@ export async function confirm(ctx: DomainContext) {
   } else {
     const expected = kind === 'create' ? 'DRAFT' : 'ACTIVE', next = kind === 'create' ? 'ACTIVE' : 'CLOSED'
     if (row.status !== next) {
-      const updated = await Programs.updateOne({ _id: row._id, status: expected, updatedAt: row.updatedAt }, { $set: { status: next, ...(kind === 'create' ? { chain: { createTxHash: txHash, blockNumber: result.receipt.blockNumber } } : {}) } })
+      const updated = await Programs.updateOne(
+        { _id: row._id, status: expected, updatedAt: row.updatedAt },
+        {
+          $set: {
+            status: next,
+            ...(kind === 'create'
+              ? {
+                  isPublic: true,
+                  chain: { createTxHash: txHash, blockNumber: result.receipt.blockNumber },
+                }
+              : {}),
+          },
+        },
+      )
       if (!updated.modifiedCount) conflict()
     }
   }

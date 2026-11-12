@@ -140,16 +140,16 @@ export function TransparencyDashboard({
         data-transparency
         className="mx-auto flex max-w-7xl flex-col gap-12 px-5 py-10 sm:px-8 sm:py-12 [&>section[id]]:scroll-mt-44"
       >
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
           <Link
             href="/program"
-            className="inline-flex min-h-11 items-center text-sm text-primary underline"
+            className="inline-flex min-h-11 items-center justify-center rounded-control bg-primary px-4 py-2.5 font-mono text-xs font-medium text-white transition-colors hover:bg-primary-hover"
           >
             Lihat daftar program
           </Link>
           <Link
             href="/cara-verifikasi"
-            className="inline-flex min-h-11 items-center text-sm text-primary underline"
+            className="inline-flex min-h-11 items-center justify-center rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
           >
             Cara memeriksa transaksi
           </Link>

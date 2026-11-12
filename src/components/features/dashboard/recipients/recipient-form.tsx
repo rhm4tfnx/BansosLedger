@@ -145,8 +145,8 @@ export function RecipientForm({ initial, onClose, onSaved }: RecipientFormProps)
       }}
     >
       <form className={s.form} onSubmit={(e) => void onSubmit(e)} noValidate>
-        <label>
-          Nama Lengkap Sesuai KTP *
+        <label className={s.fieldHalf}>
+          <span>Nama Lengkap Sesuai KTP *</span>
           <input
             aria-label="Nama Lengkap Sesuai KTP"
             placeholder="Contoh: Siti Rahmawati"
@@ -155,23 +155,26 @@ export function RecipientForm({ initial, onClose, onSaved }: RecipientFormProps)
           />
           {errors.name && <small role="alert">{errors.name.message}</small>}
         </label>
-        <label>
-          Nomor Induk Kependudukan (NIK 16 Digit) {isEdit ? '(Opsional jika tidak diubah)' : '*'}
+        <label className={s.fieldHalf}>
+          <span>
+            Nomor Induk Kependudukan (NIK 16 Digit) {isEdit ? '(Opsional jika tidak diubah)' : '*'}
+          </span>
           <input
             aria-label="Nomor Induk Kependudukan (NIK)"
+            aria-describedby="recipient-nik-helper"
             inputMode="numeric"
             maxLength={16}
             placeholder={initial ? `Tersimpan: ${initial.nikMasked}` : '731104xxxxxxxxxx'}
             disabled={isPending}
             {...register('nik')}
           />
-          <small>
+          <small id="recipient-nik-helper">
             NIK dienkripsi AES-256-GCM di server dan tidak pernah ditempatkan pada URL.
           </small>
           {errors.nik && <small role="alert">{errors.nik.message}</small>}
         </label>
-        <label>
-          Dusun / Lingkungan *
+        <label className={s.fieldDusun}>
+          <span>Dusun / Lingkungan *</span>
           <input
             aria-label="Dusun / Lingkungan"
             placeholder="Contoh: Kampung Baru"
@@ -180,8 +183,8 @@ export function RecipientForm({ initial, onClose, onSaved }: RecipientFormProps)
           />
           {errors.dusun && <small role="alert">{errors.dusun.message}</small>}
         </label>
-        <label>
-          RT *
+        <label className={s.fieldSmall}>
+          <span>RT *</span>
           <input
             aria-label="RT"
             inputMode="numeric"
@@ -192,8 +195,8 @@ export function RecipientForm({ initial, onClose, onSaved }: RecipientFormProps)
           />
           {errors.rt && <small role="alert">{errors.rt.message}</small>}
         </label>
-        <label>
-          RW *
+        <label className={s.fieldSmall}>
+          <span>RW *</span>
           <input
             aria-label="RW"
             inputMode="numeric"
@@ -204,8 +207,8 @@ export function RecipientForm({ initial, onClose, onSaved }: RecipientFormProps)
           />
           {errors.rw && <small role="alert">{errors.rw.message}</small>}
         </label>
-        <label>
-          Nomor Telepon (Opsional)
+        <label className={s.full}>
+          <span>Nomor Telepon (Opsional)</span>
           <input
             aria-label="Nomor Telepon"
             inputMode="tel"
