@@ -12,7 +12,7 @@ export const IDLE_LIFETIME = 30 * 60 * 1000
 export interface VerifiedSession { userId: string; role: Role; expiresAt: number; walletVerified: boolean; boundWalletAddress?: string; mustChangePassword?: boolean }
 export const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
 export function getSessionCookieOptions(maxAgeSeconds = SESSION_LIFETIME / 1000) {
-  return { httpOnly: true, sameSite: 'lax' as const, secure: process.env.NODE_ENV === 'production', path: '/', maxAge: maxAgeSeconds }
+  return { httpOnly: true, sameSite: 'lax' as const, secure: process.env.APP_BASE_URL?.startsWith('https://') ?? false, path: '/', maxAge: maxAgeSeconds }
 }
 export async function currentTokenHash() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value

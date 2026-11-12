@@ -64,15 +64,15 @@ export function route(permission: Permission, handler: (ctx: DomainContext) => P
     if (auth.response) return auth.response
     try {
       if (write && !isSameOriginRequest(request)) return problem(403, 'FORBIDDEN_ORIGIN', 'Origin tidak diizinkan.')
-      const params = context ? await context.params : {}
+      const params = (await context?.params) ?? {}
       if (params.id) idSchema.parse(params.id)
       return await handler({ request, actor: auth.session, params })
     } catch (error) { return domainFailure(error) }
   }, request)
 }
 export function publicRoute(handler: (request: Request, params: Record<string, string>) => Promise<Response>) {
-  return (request: Request, context: RouteContext) => asV1(async () => {
-    try { await connectDatabase(); const params = await context.params; idSchema.parse(params.id); return await handler(request, params) }
+  return (request: Request, context?: RouteContext) => asV1(async () => {
+    try { await connectDatabase(); const params = (await context?.params) ?? {}; idSchema.parse(params.id); return await handler(request, params) }
     catch (error) { return domainFailure(error) }
   }, request)
 }
