@@ -4,12 +4,12 @@
 
 | Atribut | Nilai |
 | --- | --- |
-| Versi dokumen | **2.7 — Source of Truth** |
-| Tanggal | 31 Oktober 2026 |
-| Menggantikan | PRD v2.6 (29 Okt 2026), v2.5 (28 Okt 2026), v2.4, v2.3 dan v2.2 (27 Okt 2026), v2.1 (26 Okt 2026), dan v1.0 (26 Sep 2026, "Rancangan Sebelum Observasi") |
-| Sumber | PRD v1.0, Tabel User Role & Permission Matrix v1.0, Proposal Skripsi (Rahmat Hidayat, NIM 220209552013, UNM), serta 10 keputusan pemilik produk tanggal 27 Okt 2026 dan tiga koreksi susulan (Bagian 22.1, D-15 s.d. D-35) |
+| Versi dokumen | **2.9 — Source of Truth** |
+| Tanggal | 6 November 2026 |
+| Menggantikan | PRD v2.8 (3 Nov 2026), v2.7 (31 Okt 2026), v2.6 (29 Okt 2026), v2.5 (28 Okt 2026), v2.4, v2.3 dan v2.2 (27 Okt 2026), v2.1 (26 Okt 2026), dan v1.0 (26 Sep 2026, "Rancangan Sebelum Observasi") |
+| Sumber | PRD v1.0, Tabel User Role & Permission Matrix v1.0, Proposal Skripsi (Rahmat Hidayat, NIM 220209552013, UNM), serta 10 keputusan pemilik produk tanggal 27 Okt 2026 dan tiga koreksi susulan (Bagian 22.1, D-15 s.d. D-54) |
 | Lokasi studi kasus | Kelurahan Takkalasi, Kec. Balusu, Kab. Barru, Sulawesi Selatan |
-| Status | Keputusan pemilik produk 27 Okt 2026, koreksi susulan, infrastruktur 2 VPS (2 × 4 GB), Chain ID 250204, dan **`renounceOwnership()` dinonaktifkan** sudah dikunci. Saat ini proyek dijalankan **lokal** dulu; pilot VPS menyusul. Pertanyaan yang masih terbuka ada di **Bagian 21** |
+| Status | Keputusan pemilik produk 27 Okt–6 Nov 2026 sudah dikunci, termasuk **2FA TOTP end-to-end, pembersihan rute lama, seed dan skrip skenario, artefak infrastruktur, CI/CD lengkap, dokumentasi operasional, banner pemeliharaan + SEO**, dan penutupan Q-25. Proyek dijalankan **lokal** dulu; pilot VPS menyusul. Pertanyaan yang masih terbuka ada di **Bagian 21** (Blocker: Q-02) |
 
 ---
 
@@ -94,6 +94,7 @@ Inti sistem:
 | NG5 | Deploy ke blockchain publik (Ethereum mainnet, Polygon, dll.) | Jaringan privat berizin sesuai skripsi |
 | NG6 | Multi-kelurahan / multi-tenant | Tidak dibangun sekarang, tetapi desain data menyisakan ruang (lihat NFR Flexibility) |
 | NG7 | Menjalankan 4 validator pada infrastruktur milik masing-masing institusi | **[SUMBER]** prototype: 4 container pada **dua VPS (2+2)** yang dikelola satu pihak (batasan diakui, lihat Risiko R-01) |
+| NG8 | Mengumpulkan data sosial-ekonomi penerima (KK, pekerjaan, penghasilan, tanggungan) | Minimisasi data (UU PDP); penetapan penerima ada di luar cakupan (NG1) **[FINAL K1, D-36]** |
 
 ### 3.3 Indikator keberhasilan (acceptance di level produk)
 
@@ -461,8 +462,8 @@ Jika pengukuran melewati 80%, opsi cadangan: naikkan salah satu VPS ke 8 GB, ata
 | Styling | **Tailwind CSS v4** | Cepat, konsisten, bundle kecil | CSS Modules: lebih lambat dibangun |
 | Komponen UI | **shadcn/ui** (di atas Radix UI) + **lucide-react** | Aksesibel (WAI-ARIA), kode dimiliki sendiri, mudah dikustomisasi | MUI/Ant: berat, gaya sulit disesuaikan |
 | Form dan validasi | **React Hook Form** + **Zod** (skema dibagi dengan backend) | Satu sumber aturan validasi | Formik: kurang terawat |
-| Data fetching klien | **TanStack Query** | Cache, retry, polling status transaksi | SWR (setara; TanStack lebih lengkap) |
-| Tabel | **TanStack Table** | Sorting/filter/paginasi server-side | AG Grid: berlebihan |
+| Data fetching klien | **TanStack Query** | Cache, retry, polling status transaksi | SWR (setara; dihapus pada akhir integrasi) |
+| Tabel | **Komponen tabel yang sudah ada** (TanStack Table tidak dipasang) **[FINAL K4, D-39]** | Mengganti komponen tabel mengubah tampilan | TanStack Table: ditunda |
 | Grafik | **Recharts** | Cukup untuk KPI dashboard | Chart.js |
 | State global ringan | **Zustand** (hanya state wallet/UI transaksi) | Minimal, tanpa boilerplate | Redux: berlebihan |
 | Web3 klien | **Ethers.js v6** (`BrowserProvider`) + **MetaMask** **[SUMBER]** | Ditetapkan skripsi | wagmi/viem: bagus, tetapi menyimpang dari skripsi dan uji Compatibility |
@@ -549,7 +550,7 @@ Jika pengukuran melewati 80%, opsi cadangan: naikkan salah satu VPS ke 8 GB, ata
 
 | Layer | Teknologi |
 | --- | --- |
-| UI | Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · RHF + Zod · TanStack Query/Table · Recharts · Zustand |
+| UI | Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · RHF + Zod · TanStack Query · Recharts · Zustand |
 | API | Next.js Route Handlers · Zod · Mongoose 8 · sesi opaque + Argon2id · SIWE · pino · Sentry |
 | Data | MongoDB self-hosted (Docker, VPS-1) · AES-256-GCM + HMAC blind index · koleksi TTL untuk rate limit |
 | Web3 klien | Ethers.js v6 · MetaMask |
@@ -573,12 +574,15 @@ Format: **ID — Pernyataan** · Prioritas · Role · *Acceptance Criteria (AC)*
 | FR-AUTH-03 | Logout menghapus sesi di server | M | Semua internal | Token lama tidak bisa dipakai lagi (401) |
 | FR-AUTH-04 | Pembatasan percobaan login: 5 gagal / 15 menit per akun dan per IP → kunci sementara 15 menit | M | Semua internal | Percobaan ke-6 ditolak `429`; kejadian tercatat di log |
 | FR-AUTH-05 | Kebijakan password: min. 12 karakter, dicek terhadap daftar password bocor umum, hash Argon2id | M | Semua internal | Password lemah ditolak dengan pesan jelas |
-| FR-AUTH-06 | 2FA TOTP untuk Operator (wajib), opsional untuk role lain | S | Operator | Login Operator meminta kode TOTP; ada kode pemulihan sekali pakai |
+| FR-AUTH-06 | 2FA TOTP untuk Operator (wajib di produksi, `AUTH_REQUIRE_TOTP=true`), opsional untuk role lain. **Prioritas dinaikkan dari S ke M** karena mitigasi T-16 dan R-05 bergantung padanya | M | Operator | Login akun dengan 2FA aktif meminta TOTP atau kode pemulihan; tanpa itu `401 TOTP_REQUIRED` dan tidak ada sesi **[FINAL D-45]** |
 | FR-AUTH-07 | Otorisasi role di server pada setiap endpoint (default tolak) | M | — | Tes: setiap endpoint × setiap role sesuai matriks 6.1; role tak berwenang mendapat `403` |
 | FR-AUTH-08 | **Pengikatan wallet (SIWE)**: operator menghubungkan MetaMask, menandatangani pesan bernonce (domain, chainId, nonce, kedaluwarsa 5 menit); server memverifikasi tanda tangan dan mencocokkan alamat dengan `authorizedWallet` di contract | M | Operator | Alamat yang tidak sama dengan `authorizedWallet` → tidak bisa mengirim transaksi; nonce hanya berlaku sekali |
 | FR-AUTH-09 | **Gerbang transaksi**: tombol kirim transaksi aktif hanya jika (a) MetaMask terpasang, (b) chainId benar, (c) akun aktif = wallet terikat | M | Operator | Salah jaringan → tombol "Ganti jaringan" (`wallet_switchEthereumChain`/`wallet_addEthereumChain`). Salah akun → peringatan jelas |
 | FR-AUTH-10 | Halaman publik dan Explorer dapat diakses tanpa login | M | Publik | Tanpa cookie sesi tetap `200` |
 | FR-AUTH-11 | **Panel wallet** (`/dashboard/wallet`): menampilkan alamat `authorizedWallet`, alamat `owner`, status ikat wallet, chainId/jaringan, dan status `pause`. Operator dapat mengikat/mengubah wallet; Kecamatan dan Dinas Sosial hanya membaca **[FINAL]** | M | Operator (kelola); Kecamatan, Dinas (baca saja) | Kecamatan/Dinas tidak melihat tombol sambung MetaMask, ikat wallet, atau kirim transaksi. Endpoint tulis wallet menolak role selain Operator dengan `403`. Tidak ada private key atau rahasia yang ditampilkan |
+| FR-AUTH-12 | **Pendaftaran 2FA**: `mfa/setup` (verifikasi ulang password, rahasia sementara terenkripsi berlaku 10 menit, URI `otpauth` dan rahasia ditampilkan sekali) lalu `mfa/enable` (verifikasi TOTP, simpan terenkripsi AES-256-GCM, cabut sesi lain). UI di `/dashboard/pengaturan` dengan QR dibuat di klien **[FINAL D-45]** | M | Operator, Kecamatan, Dinas | Rahasia dan kode tidak pernah di log, URL, atau penyimpanan klien; pendaftaran gagal bila sudah aktif (`409`) |
+| FR-AUTH-13 | **Kode pemulihan**: 10 kode sekali pakai, ditampilkan sekali dengan "Salin"/"Unduh" dan kotak centang wajib, disimpan hanya sebagai HMAC-SHA256 (kunci turunan `MFA_ENC_KEY`); dipakai atomik; `mfa/recovery-codes` membuat ulang (password + TOTP); `mfa/disable` (password + TOTP/kode) dilarang untuk Operator saat `AUTH_REQUIRE_TOTP=true` (`403 MFA_REQUIRED_FOR_ROLE`) **[FINAL D-45]** | M | Operator, Kecamatan, Dinas | Kode yang sama tidak dapat dipakai dua kali; setiap aksi MFA tercatat (`MFA_ENABLED`, `MFA_DISABLED`, `MFA_RECOVERY_USED`, `MFA_RECOVERY_REGENERATED`) |
+| FR-AUTH-14 | **Sesi terbatas bila 2FA wajib tetapi belum aktif**: sesi Operator hanya boleh memanggil `/auth/me`, `/auth/logout`, `/auth/change-password`, `/auth/mfa/setup`, `/auth/mfa/enable` (lainnya `403 MFA_ENROLLMENT_REQUIRED`); UI mengarahkan ke `/dashboard/pengaturan`. Kode salah memakai kunci login yang sama (5 gagal per 15 menit); langkah TOTP yang sama tidak dapat dipakai ulang | M | Operator | `GET /auth/me` mengembalikan `mfaEnabled` dan `mfaEnrollmentRequired` **[FINAL D-45]** |
 
 ### 9.2 USR — Provisioning akun lewat skrip seed/CLI **[FINAL Q-03]**
 
@@ -590,20 +594,21 @@ Tidak ada role System Admin dan tidak ada UI atau endpoint pengelolaan akun. Aku
 | FR-USR-02 | Skrip menonaktifkan/mengaktifkan akun dan mencabut sesi aktifnya | M | Pengembang (CLI) | Akun nonaktif tidak bisa login; sesi lama menghasilkan `401` |
 | FR-USR-03 | Role hanya `OPERATOR`, `KECAMATAN`, `DINAS_SOSIAL`; tidak ada role dengan hak kelola akun di aplikasi | M | — | Tidak ada route `/dashboard/pengguna` dan endpoint `/users` |
 | FR-USR-04 | Setiap eksekusi skrip akun tercatat di log aktivitas (aksi, akun sasaran, pengguna OS pelaksana, waktu) | M | Sistem | Entri log lengkap; skrip menuntut konfirmasi interaktif di produksi |
+| FR-USR-05 | Skrip `reset-mfa --username` mengosongkan 2FA akun dan mencabut sesinya (untuk Operator yang kehilangan perangkat dan kode pemulihan) | M | Pengembang (CLI) | Tercatat di log (aktor `cli:<pengguna OS>`); konfirmasi interaktif di produksi **[FINAL D-45]** |
 
 ### 9.3 REC — Penerima
 
 | ID | Requirement | Pri | Role | AC |
 | --- | --- | :-: | --- | --- |
-| FR-REC-01 | Tambah penerima: NIK (16 digit), nama, alamat (dusun/RT/RW), telepon (opsional). Status awal `DRAFT` | M | Operator | Data tersimpan; NIK terenkripsi + blind index; commitment belum dibuat |
+| FR-REC-01 | Tambah penerima: NIK (16 digit), nama, alamat (dusun/RT/RW), telepon (opsional). Status awal `DRAFT`. KK, pekerjaan, penghasilan, dan tanggungan **tidak dikumpulkan** **[FINAL K1, D-36]** | M | Operator | Data tersimpan; NIK terenkripsi + blind index; commitment belum dibuat |
 | FR-REC-02 | Validasi NIK: 16 digit numerik, kode wilayah dan tanggal lahir masuk akal, **unik** (via blind index) | M | Operator | NIK ganda → ditolak dengan pesan "NIK sudah terdaftar" tanpa membocorkan data orang lain |
 | FR-REC-03 | Edit penerima berstatus `DRAFT` | M | Operator | Edit pada `FINAL` → `409 Conflict` |
 | FR-REC-04 | **Soft delete** penerima `DRAFT` (menyimpan `deletedAt`, `deletedBy`, alasan wajib) | M | Operator | Data tidak muncul di daftar default tetapi tetap ada di DB dan log |
 | FR-REC-05 | **Finalisasi**: `DRAFT → FINAL`; sistem menghitung **commitment** penerima (lihat 11.3) | M | Operator | Setelah FINAL: tidak bisa diedit atau dihapus (soft maupun hard) |
 | FR-REC-06 | Hard delete data final tidak tersedia di UI, API, maupun skrip operasional | M | — | Tidak ada route/handler hapus fisik; tes negatif untuk semua role |
-| FR-REC-07 | Daftar penerima: pencarian (nama, NIK via blind index), filter (status, program, dusun/RT/RW), paginasi server-side, sorting | M | Operator, Kecamatan, Dinas | 1.000 data tampil < 1 detik (p95) |
+| FR-REC-07 | Daftar penerima: pencarian (nama; NIK via blind index), filter (status, program, dusun/RT/RW), paginasi server-side, sorting | M | Operator, Kecamatan, Dinas | 1.000 data tampil < 1 detik (p95). **Pencarian NIK memakai `POST /recipients/search` (body JSON)**; `GET /recipients?q=` hanya untuk nama dan menolak nilai 16 digit dengan `400`, sehingga NIK tidak masuk URL atau log akses **[FINAL D-43]** |
 | FR-REC-08 | Detail penerima + riwayat penyaluran | M | Operator, Kecamatan, Dinas | NIK tersamar; dapat dibuka per penerima dengan pencatatan log (FR-REC-11) |
-| FR-REC-09 | Impor CSV penerima (pratinjau, laporan baris error, semua-atau-tidak per berkas) | S | Operator | Baris tidak valid ditandai; tidak ada data parsial tersimpan |
+| FR-REC-09 | Impor CSV penerima (pratinjau, laporan baris error, semua-atau-tidak per berkas) | W | Operator | **Ditunda [FINAL K3, D-38]**: tidak dibangun; UI disembunyikan di balik flag `NEXT_PUBLIC_ENABLE_CSV_IMPORT` (default mati); endpoint impor tidak disediakan |
 | FR-REC-10 | Koreksi data FINAL (mis. salah ketik) **[OPEN Q-10]** | W | — | Default MVP: tidak didukung; hanya catatan koreksi *append-only* |
 | FR-REC-11 | **Tampilkan NIK penuh**: tombol "Tampilkan" per penerima; NIK didekripsi di server dan dikirim sekali, tidak di-*cache* klien | M | Operator, Kecamatan, Dinas | Setiap pembukaan menulis log (siapa, role, recipientId, waktu); melebihi batas laju → `429`; NIK penuh tidak muncul di log, URL, atau pesan error **[FINAL Q-09]** |
 
@@ -611,7 +616,7 @@ Tidak ada role System Admin dan tidak ada UI atau endpoint pengelolaan akun. Aku
 
 | ID | Requirement | Pri | Role | AC |
 | --- | --- | :-: | --- | --- |
-| FR-PRG-01 | Buat program: kode unik, nama, deskripsi, sumber dana, jenis (tunai/barang), **nominal per penerima**, pagu total, periode mulai–akhir (format `YYYYMM`), status `DRAFT` | M | Operator | `programId = keccak256(kode)` dihitung deterministik |
+| FR-PRG-01 | Buat program: kode unik, nama, deskripsi, sumber dana, jenis (tunai/barang), **nominal per penerima**, pagu total, periode mulai–akhir (format `YYYYMM`), status `DRAFT`. Kolom **unit** dan **kriteria** tidak dipakai; kriteria ditulis di deskripsi **[FINAL K1, D-36]** | M | Operator | `programId = keccak256(kode)` dihitung deterministik |
 | FR-PRG-02 | Edit program selama `DRAFT` | M | Operator | Setelah `ACTIVE`, nominal/periode/kode terkunci |
 | FR-PRG-03 | **Aktivasi** program → kirim tx `createProgram` ke contract | M | Operator | Berhasil → `ACTIVE` + simpan txHash; gagal → tetap `DRAFT` |
 | FR-PRG-04 | Daftarkan penerima `FINAL` ke program (*enrollment*) | M | Operator | Penerima yang sama tidak bisa didaftarkan dua kali ke program yang sama |
@@ -636,6 +641,7 @@ Tidak ada role System Admin dan tidak ada UI atau endpoint pengelolaan akun. Aku
 | FR-DSB-10 | Batalkan penyaluran berstatus `DRAFT` (belum ada tx) | M | Operator | `PENDING`/`SUCCESS` tidak bisa dibatalkan |
 | FR-DSB-11 | Pencegahan penyaluran ganda berlapis: indeks unik parsial di MongoDB + pengecekan contract | M | Sistem | Dua permintaan bersamaan untuk kombinasi yang sama → hanya satu yang lolos |
 | FR-DSB-12 | Idempotensi: header `Idempotency-Key` pada `POST` pembuatan | S | Sistem | Retry jaringan tidak membuat duplikat |
+| FR-DSB-13 | **Penyusunan calldata (`tx-intent`)**: setelah bukti diunggah (CID tersedia), server menyusun calldata `recordDisbursement` (`{to, data, chainId}`) untuk ditandatangani di MetaMask. `POST /disbursements` hanya mengembalikan pratinjau payload | M | Operator | Calldata hanya tersedia bila ≥ 1 bukti; server tidak pernah menandatangani atau mengirim transaksi **[FINAL D-44]** |
 
 ### 9.6 EVD — Bukti penyaluran
 
@@ -655,7 +661,7 @@ Tidak ada role System Admin dan tidak ada UI atau endpoint pengelolaan akun. Aku
 | ID | Requirement | Pri | AC |
 | --- | --- | :-: | --- |
 | FR-CHN-01 | Konfigurasi jaringan terpusat (chainId, RPC URL, alamat contract, ABI) dari env + `deployments/<chainId>.json` | M | Mengganti jaringan tidak butuh ubah kode |
-| FR-CHN-02 | Indikator **status jaringan** (Normal / Terganggu / Berhenti) berbasis kesegaran blok terakhir dan jumlah validator aktif; tampil di dashboard dan halaman publik | M | Saat jaringan berhenti, tombol kirim dinonaktifkan dengan penjelasan |
+| FR-CHN-02 | Indikator **status jaringan** (Normal / Terganggu / Berhenti) berbasis kesegaran blok terakhir dan jumlah validator aktif; tampil di dashboard dan halaman publik | M | Saat jaringan berhenti, tombol kirim dinonaktifkan dengan penjelasan. Layar monitoring hanya menampilkan status jaringan, blok terakhir, dan jumlah validator **[FINAL K2, D-37]**. Jumlah validator: dari API `QBFT` bila tersedia, jika tidak dari daftar `settings` **[FINAL Q-25, D-53]** |
 | FR-CHN-03 | Layanan verifikasi receipt (dipakai FR-DSB-05) dengan timeout 10 s dan retry terbatas untuk pembacaan | M | Retry **tidak** dilakukan untuk pengiriman transaksi (hindari tx ganda) |
 | FR-CHN-04 | **Rekonsiliasi** terjadwal (tiap 5 menit): untuk penyaluran `PENDING` > 2 menit, cari event berdasarkan `refId` (indexed) atau `txHash`; perbarui ke `SUCCESS`/`FAILED`; tandai anomali (DB SUCCESS tetapi chain tidak punya event, atau sebaliknya) | M | Tidak ada status menggantung; anomali muncul di laporan rekonsiliasi |
 | FR-CHN-05 | Indeks event ke MongoDB (`chain_events`) untuk mempercepat Explorer dan laporan | S | Sinkron ulang dari blok N dapat dijalankan idempoten |
@@ -680,6 +686,7 @@ Tidak ada role System Admin dan tidak ada UI atau endpoint pengelolaan akun. Aku
 | --- | --- | :-: | --- | --- |
 | FR-DSH-01 | Dashboard: program aktif, total penerima FINAL, pagu, realisasi (Rp dan %), jumlah PENDING/FAILED, status jaringan, 10 transaksi terakhir | M | Operator (aksi), Kecamatan/Dinas (read-only) | Tombol aksi tidak muncul untuk read-only |
 | FR-DSH-02 | Antrian tindakan Operator: PENDING lama, FAILED, program belum terdaftar on-chain | S | Operator | — |
+| FR-DSH-03 | **Prinsip data nyata**: setiap angka atau metrik di dashboard, monitoring, dan verifikasi bersumber dari backend atau chain; **tidak ada metrik ilustrasi** | M | Semua | Tidak ada nilai hard-coded atau mock di build produksi **[FINAL K2, D-37]** |
 | FR-RPT-01 | **Laporan realisasi** per program/periode: pagu, target penerima, realisasi, **sisa dana**, persentase, daftar TxHash. Rujukan isi: PMK 254/PMK.05/2015 Pasal 32 ayat (2) (pagu, realisasi, sisa dana, setoran kembali) **[OPEN Q-14: format resmi kelurahan]** | M | Operator, Kecamatan, Dinas | — |
 | FR-RPT-02 | Laporan penerima dan status penyaluran (NIK tersamar kecuali Operator) | M | sama | — |
 | FR-RPT-03 | **Laporan rekonsiliasi** DB vs chain (jumlah, nominal, anomali) | M | sama | Menunjukkan 0 anomali pada kondisi normal |
@@ -697,6 +704,8 @@ Tidak ada role System Admin dan tidak ada UI atau endpoint pengelolaan akun. Aku
 | FR-PUB-06 | Unduh laporan publik agregat (CSV/PDF) | S | Tanpa PII |
 | FR-PUB-07 | SEO dasar, Open Graph, `sitemap.xml`, `robots.txt` | S | — |
 | FR-PUB-08 | Kanal pengaduan masyarakat | W (backlog) | Belum dibangun |
+| FR-PUB-09 | **Strategi render**: halaman publik informasi (ringkasan, program, buku besar, Cara Verifikasi) memakai *server-side fetch* dengan `revalidate`; bagian interaktif memakai TanStack Query; **Cek Status tetap dinamis dan `no-store`** (FR-PUB-04) | M | Lighthouse ≥ 90 (desktop dan mobile); hasil Cek Status tidak pernah di-*cache* **[FINAL K5, D-40]** |
+| FR-PUB-10 | **SEO halaman publik**: `sitemap.xml`, `robots.txt` (melarang `/dashboard`, `/api`, `/login`), dan metadata (judul, deskripsi, canonical, OpenGraph); `/cek-bansos` ber-`noindex` | S | Sitemap dan robots dapat diakses setelah `build`; Cek Status tetap `no-store` **[FINAL D-52]** |
 
 ### 9.11 AUD — Log aktivitas
 
@@ -713,9 +722,14 @@ Tidak ada role System Admin dan tidak ada UI atau endpoint pengelolaan akun. Aku
 | ID | Requirement | Pri | AC |
 | --- | --- | :-: | --- |
 | FR-SYS-01 | Endpoint `GET /api/health` (liveness) dan `/api/health/ready` (DB, RPC, Pinata) | M | Dipakai monitor uptime |
-| FR-SYS-02 | Banner pemeliharaan otomatis saat chain atau DB tidak tersedia | S | — |
-| FR-SYS-03 | Seed **program contoh** tidak berjalan di produksi; skrip **provisioning akun** (FR-USR) boleh dijalankan di produksi hanya manual oleh pengembang lewat SSH | M | Seed contoh terkunci oleh `NODE_ENV` dan flag eksplisit; skrip akun menuntut konfirmasi interaktif dan tercatat di log |
+| FR-SYS-02 | Banner pemeliharaan otomatis saat chain atau DB tidak tersedia: komponen memantau `GET /api/v1/health/ready` tiap 30 detik (berhenti saat tab tersembunyi), tombol kirim penyaluran dinonaktifkan, detail error internal tidak ditampilkan **[FINAL D-52]** | S | Banner tampil < 60 detik setelah layanan jatuh |
+| FR-SYS-03 | Seed **program contoh** tidak berjalan di produksi; skrip **provisioning akun** (FR-USR) boleh dijalankan di produksi hanya manual oleh pengembang lewat SSH. Seed memakai `pnpm seed:demo` dengan konstanta program uji di bagian atas berkas, dan menolak berjalan di produksi kecuali `ALLOW_SEED_DEMO=true` dan nama DB diketik ulang **[FINAL D-48]** | M | Seed contoh terkunci oleh `NODE_ENV` dan flag eksplisit; skrip akun menuntut konfirmasi interaktif dan tercatat di log |
 | FR-SYS-04 | Dokumentasi pencadangan dan pemulihan (DB dan volume chain) | M | Uji pulih dilakukan minimal sekali |
+| FR-SYS-05 | Sebelum rilis pilot, kode di balik flag **LPJ** dan **mode uji** dihapus, bukan hanya dimatikan; skenario penyelewengan dijalankan lewat skrip uji, bukan lewat UI | M | Build produksi tidak memuat komponen, string, atau flag LPJ dan mode uji; `grep` bersih **[FINAL K6, D-41]** |
+| FR-SYS-06 | Skrip skenario `pnpm scenarios` menjalankan SP-01…SP-09 hanya pada chain lokal (chainId 250204, RPC localhost, `SCENARIO_ALLOW=true`); hasil tiap skenario disimpan di `docs/evidence/SP-0X/result.json`; kode keluar 1 bila ada yang gagal | M | 9/9 PASS pada jaringan lokal **[FINAL D-48]** |
+| FR-SYS-07 | Skrip beban `pnpm perf:disbursement` (N = 10, 50, 100, 200) mencatat p50, p95, max, dan tingkat sukses ke `docs/evidence/PF/` | S | Berkas CSV bertanggal tercipta **[FINAL D-48]** |
+| FR-SYS-08 | Paket infrastruktur `infra/` dan `Dockerfile`: compose dev/VPS-1/VPS-2/app, Caddyfile (log akses tanpa query string), skrip backup, uji pulih, watchdog, deploy dengan rollback, dan bootstrap VPS | M | `docker build` dan validasi compose lulus; instal bersih ≤ 60 menit (FX-02) **[FINAL D-49]** |
+| FR-SYS-09 | Rute API lama (`/api/auth/*`, `/api/penyaluran`, `/api/ipfs`, `/api/audit`, `/api/verifikasi`) dan sisa layanan Vercel (analytics, gambar remote) dihapus, dan `.env.example` dibersihkan | M | Rute lama mengembalikan `404`; `grep vercel` bersih **[FINAL D-46, D-47]** |
 
 ---
 
@@ -733,7 +747,7 @@ Tidak ada role System Admin dan tidak ada UI atau endpoint pengelolaan akun. Aku
 | SC-D6 | *Custom errors* (bukan string revert) | Hemat gas, mudah dipetakan ke pesan UI |
 | SC-D7 | Compile dengan `evmVersion: "paris"` kecuali genesis mengaktifkan fork lebih baru | Hindari kegagalan opcode |
 | SC-D8 | Semua data identitas penerima berupa **commitment** `bytes32` | C-05 |
-| SC-D9 | `renounceOwnership()` **dinonaktifkan**: di-*override* dan selalu `revert RenounceDisabled()` **[FINAL]** | Owner adalah satu-satunya jalur rotasi wallet bila bocor dan satu-satunya yang dapat `unpause`. Melepasnya membuat wallet bocor tidak dapat diganti dan kontrak yang sedang di-*pause* terjeda permanen. Kepemilikan hanya berpindah lewat `transferOwnership` + `acceptOwnership` (`Ownable2Step`) |
+| SC-D9 | `renounceOwnership()` **dinonaktifkan**: di-*override* menjadi `public pure` dan **selalu** `revert RenounceDisabled()` untuk siapa pun (tanpa `onlyOwner`, sehingga pemanggil asing juga mendapat error yang sama) **[FINAL]** | Owner adalah satu-satunya jalur rotasi wallet bila bocor dan satu-satunya yang dapat `unpause`. Melepasnya membuat wallet bocor tidak dapat diganti dan kontrak yang sedang di-*pause* terjeda permanen. Kepemilikan hanya berpindah lewat `transferOwnership` + `acceptOwnership` (`Ownable2Step`) |
 
 ### 10.2 Antarmuka (rancangan)
 
@@ -842,7 +856,7 @@ Semua lolos → simpan `Disbursement`, tandai kunci duplikat, emit `Disbursement
 | SC-Q4 | Invarian (fuzz) | Jumlah penyaluran per `(program, periode, commitment)` ≤ 1; `amount` tercatat selalu = nominal program |
 | SC-Q5 | Dokumentasi | NatSpec lengkap; ABI dan alamat tersimpan di `deployments/` |
 | SC-Q6 | Event | Semua perubahan state memancarkan event (dasar Explorer dan rekonsiliasi) |
-| SC-Q7 | Kepemilikan | `renounceOwnership()` selalu `revert RenounceDisabled`; kepemilikan berpindah hanya lewat `transferOwnership` + `acceptOwnership`; teruji |
+| SC-Q7 | Kepemilikan | `renounceOwnership()` selalu `revert RenounceDisabled` untuk semua pemanggil (owner maupun bukan); kepemilikan berpindah hanya lewat `transferOwnership` + `acceptOwnership`; teruji |
 
 ---
 
@@ -869,7 +883,7 @@ Semua koleksi memiliki `_id`, `createdAt`, `updatedAt`, dan `schemaVersion`. Wak
 | `name`, `institution` | string | Kelurahan Takkalasi / Kecamatan Balusu / Dinas Sosial Barru |
 | `role` | enum | `OPERATOR`, `KECAMATAN`, `DINAS_SOSIAL` |
 | `passwordHash` | string | Argon2id |
-| `mfa` | `{ secretEnc, enabledAt, recoveryHashes[] }` | |
+| `mfa` | `{ secretEnc, pendingSecretEnc, pendingExpiresAt, enabledAt, recoveryHashes[], lastUsedStep }` | `recoveryHashes`: HMAC-SHA256 dengan kunci turunan `MFA_ENC_KEY` |
 | `wallet` | `{ address, boundAt, lastSiweNonceUsed }` | Hanya Operator |
 | `isActive`, `failedAttempts`, `lockedUntil`, `lastLoginAt`, `mustChangePassword` | | |
 
@@ -938,18 +952,26 @@ commitment = keccak256( abi.encodePacked( NIK , COMMITMENT_PEPPER ) )
 
 Prefix `/api/v1`. Respons JSON; error mengikuti **RFC 9457** (`application/problem+json`). Paginasi `?page&limit(≤100)&sort`. Semua `POST/PATCH/DELETE` memeriksa header `Origin` (anti-CSRF) dan memakai Zod. Peran: **OP** Operator, **KC** Kecamatan, **DS** Dinas Sosial, **PUB** publik.
 
+**Konvensi DTO [FINAL D-42]:** respons tidak membuka detail internal MongoDB (`_id`, `__v`, `schemaVersion`); pakai `id` bertipe string. Daftar penyaluran sudah memuat `programCode`, `programName`, `recipientName`, dan `recipientNikMasked` (tanpa NIK penuh) agar UI tidak melakukan permintaan N+1.
+
 | Metode | Path | Peran | Fungsi |
 | --- | --- | --- | --- |
 | POST | `/auth/login` | PUB | Login |
 | POST | `/auth/logout` | semua internal | Logout |
 | GET | `/auth/me` | semua internal | Profil + role |
-| POST | `/auth/mfa/verify` | OP | Verifikasi TOTP |
+| POST | `/auth/mfa/verify` | OP, KC, DS | Verifikasi TOTP atau kode pemulihan |
+| POST | `/auth/mfa/setup` | OP, KC, DS | Mulai pendaftaran 2FA (butuh password) **[FINAL D-45]** |
+| POST | `/auth/mfa/enable` | OP, KC, DS | Aktifkan 2FA dengan TOTP; kode pemulihan tampil sekali |
+| POST | `/auth/mfa/disable` | OP, KC, DS | Nonaktifkan 2FA (dilarang untuk Operator pada kebijakan produksi) |
+| POST | `/auth/mfa/recovery-codes` | OP, KC, DS | Buat ulang kode pemulihan |
+| POST | `/auth/change-password` | OP, KC, DS | Ganti password sendiri (sesi pengguna itu saja) |
 | POST | `/auth/wallet/nonce` | OP | Minta nonce SIWE |
 | POST | `/auth/wallet/bind` | OP | Verifikasi tanda tangan, ikat wallet |
 | GET | `/wallet/status` | OP, KC, DS | Status wallet aplikasi, `authorizedWallet`, `owner`, chainId, status `pause` (baca saja) **[FINAL]** |
 | GET | `/recipients` | OP, KC, DS | Daftar penerima |
+| POST | `/recipients/search` | OP, KC, DS | Pencarian penerima termasuk NIK (body JSON, NIK tidak di URL) **[FINAL D-43]** |
 | POST | `/recipients` | OP | Tambah |
-| POST | `/recipients/import` | OP | Impor CSV |
+| POST | `/recipients/import` | OP | Impor CSV **[DITUNDA, D-38]** |
 | GET | `/recipients/:id` | OP, KC, DS | Detail |
 | POST | `/recipients/:id/reveal-nik` | OP, KC, DS | Tampilkan NIK penuh (dicatat, dibatasi laju) **[FINAL Q-09]** |
 | PATCH | `/recipients/:id` | OP | Edit (hanya DRAFT) |
@@ -964,9 +986,10 @@ Prefix `/api/v1`. Respons JSON; error mengikuti **RFC 9457** (`application/probl
 | POST | `/programs/:id/register-intent` | OP | Siapkan payload `registerRecipients` (batch) |
 | POST | `/programs/:id/close-intent` | OP | Siapkan payload `closeProgram` |
 | GET | `/disbursements` | OP, KC, DS | Daftar |
-| POST | `/disbursements` | OP | Buat (DRAFT), kembalikan payload tx |
+| POST | `/disbursements` | OP | Buat (DRAFT), kembalikan pratinjau payload tx (calldata final lewat `tx-intent`) |
 | GET | `/disbursements/:id` | OP, KC, DS | Detail |
 | POST | `/disbursements/:id/evidence` | OP | Unggah bukti → Pinata |
+| POST | `/disbursements/:id/tx-intent` | OP | Susun calldata `recordDisbursement` (butuh bukti) **[FINAL D-44]** |
 | GET | `/disbursements/:id/evidence` | PUB | Daftar bukti publik (CID, tipe, ukuran, status) |
 | PATCH | `/disbursements/:id/tx-submitted` | OP | Laporkan `txHash` (→ PENDING) |
 | POST | `/disbursements/:id/confirm` | OP | **Server memverifikasi receipt** → SUCCESS/FAILED |
@@ -1004,7 +1027,7 @@ Prefix `/api/v1`. Respons JSON; error mengikuti **RFC 9457** (`application/probl
 | | `/explorer`, `/explorer/blok/[n]`, `/explorer/tx/[hash]`, `/explorer/alamat/[addr]`, `/explorer/contract`, `/explorer/validator` | Semua | Blockchain Explorer |
 | **Auth** | `/masuk` | Internal | Login (+ TOTP) |
 | **Internal** | `/dashboard` | OP, KC, DS | Ringkasan |
-| | `/dashboard/penerima` (+ `/baru`, `/[id]`, `/[id]/ubah`, `/impor`) | OP tulis; KC/DS baca | |
+| | `/dashboard/penerima` (+ `/baru`, `/[id]`, `/[id]/ubah`; `/impor` **ditunda, D-38**) | OP tulis; KC/DS baca | |
 | | `/dashboard/program` (+ `/baru`, `/[id]`) | OP tulis; KC/DS baca | |
 | | `/dashboard/penyaluran` (+ `/baru`, `/[id]`) | OP tulis; KC/DS baca | |
 | | `/dashboard/laporan` | OP, KC, DS | |
@@ -1149,7 +1172,7 @@ SP-01 s.d. SP-05 **[SUMBER]** (Tabel kisi-kisi, adaptasi Faqih et al., 2026). SP
 | Reliability | RL-01 | Matikan node RPC saat idle dan saat tx berjalan | Pesan jelas; tidak ada data korup |
 | | RL-02 | Matikan **1** validator | Blok tetap dibuat; tx tetap terkonfirmasi (N=4, f=1) |
 | | RL-03 | Matikan **2** validator | Tidak ada blok baru; UI menampilkan status jaringan berhenti; tidak ada SUCCESS palsu |
-| Security | SE-01 | Konfidensialitas: role tak berwenang mengakses NIK/endpoint terlarang | `403`; NIK tak ada di respons API publik, log, atau chain (tampilan NIK pada hasil cek status berasal dari input pengguna) |
+| Security | SE-01 | Konfidensialitas: role tak berwenang mengakses NIK/endpoint terlarang | `403`; NIK tak ada di respons API publik, log (termasuk log akses reverse proxy dan URL/query string), atau chain (tampilan NIK pada hasil cek status berasal dari input pengguna) |
 | | SE-02 | Integritas: ubah data DB / coba ubah chain | Terdeteksi (lihat SP-05/SP-08) |
 | | SE-03 | Non-repudiation: tiap tx memiliki `from`, tanda tangan, `txHash` yang dapat diverifikasi | Ya |
 | | SE-04 | Authenticity: wallet bukan Kelurahan ditolak (UI + contract) | Ya |
@@ -1216,7 +1239,7 @@ bansosledger/
 8. Atur `--host-allowlist`, `--rpc-http-cors-origins`, `--metrics-enabled` (internal), penyimpanan data **Bonsai**.
 9. **Pembagian 2+2 [FINAL]:** VPS-1 = `besu-validator-1`, `besu-validator-2`; VPS-2 = `besu-validator-3`, `besu-validator-4`, `besu-rpc`. Batasi memori JVM tiap node agar RAM tiap VPS < 80%.
 10. **P2P antar-VPS:** tiap validator memakai port p2p host yang unik (VPS-1: 30303, 30304; VPS-2: 30303, 30304; node RPC: 30305) dan saling terhubung lewat `--bootnodes`/`static-nodes.json` berisi enode dengan IP VPS (IP privat bila kedua VPS terhubung privat; bila tidak, IP publik). Port p2p dibuka **hanya** dari IP VPS lawan (firewall konsol Tencent + `ufw`). Daftar izin node memuat 5 enode. Kunci validator dibuat di laptop dan dikirim **langsung ke VPS tujuan** lewat SCP, sehingga kunci validator 3–4 tidak pernah ada di VPS-1 **[FINAL, D-35]**; cadangan terenkripsi disimpan offline.
-11. **Caddy di VPS-2:** menerima `rpc.<domain>` dan meneruskan hanya ke `besu-rpc` (port 8545 internal). Permintaan dari VPS-1 membawa header `X-API-Key` (`RPC_API_KEY`) untuk batas laju lebih longgar **[REKOM, VERIFIKASI]**.
+11. **Caddy di VPS-2:** menerima `rpc.<domain>` dan meneruskan hanya ke `besu-rpc` (port 8545 internal). Permintaan dari VPS-1 membawa header `X-API-Key` (`RPC_API_KEY`) untuk batas laju lebih longgar **[REKOM, VERIFIKASI]**. Log akses Caddy (VPS-1 dan VPS-2) **tidak memuat query string** (SE-01).
 
 > Nama flag di atas harus diverifikasi terhadap dokumentasi versi Besu yang dipasang (flag dapat berubah antar versi).
 
@@ -1251,8 +1274,8 @@ Semua divalidasi saat boot (aplikasi menolak start jika ada yang hilang atau sal
 ### 18.5 CI/CD (GitHub Actions)
 
 1. **Pull request:** install (lockfile beku) → lint → typecheck → unit/integrasi → contract (compile, test, coverage, gas report) → Slither + Solhint → gitleaks + `pnpm audit` → build.
-2. **Merge ke `main`:** semua di atas + E2E Playwright + Lighthouse CI → build image Docker dan push ke registry (GHCR). Image dibangun di CI, **bukan** di VPS (RAM 4 GB).
-3. **Rilis:** tag semver; deploy produksi dengan **persetujuan manual** (tarik image di VPS-1 lewat SSH, `docker compose up -d`); kontrak dideploy lewat skrip terpisah (tidak otomatis).
+2. **Merge ke `main`:** semua di atas + E2E Playwright + Lighthouse CI dijalankan dua kali, **desktop dan mobile** (`lighthouserc.mobile.json`), keduanya ≥ 90 (KPI-4) → build image Docker dan push ke registry (GHCR). Image dibangun di CI, **bukan** di VPS (RAM 4 GB).
+3. **Rilis:** tag semver; deploy lewat workflow `deploy.yml` (`workflow_dispatch`) pada GitHub Environment `pilot` yang memerlukan **persetujuan manual**; `infra/scripts/deploy.sh <tag>` menarik image di VPS-1 lewat SSH, menjalankan `docker compose up -d`, menunggu `/api/health/ready`, dan melakukan rollback otomatis bila gagal; kontrak dideploy lewat skrip terpisah (tidak otomatis).
 4. Branch: *trunk-based* dengan PR kecil; Conventional Commits; ID requirement di judul PR.
 
 ### 18.6 Prosedur deploy smart contract
@@ -1276,7 +1299,7 @@ Semua divalidasi saat boot (aplikasi menolak start jika ada yang hilang atau sal
 
 ### 18.8 Hardening VPS
 
-Berlaku pada **kedua VPS**: SSH hanya kunci publik; login root/password nonaktif; `fail2ban`; `unattended-upgrades`; swap 2 GB; log Docker dirotasi (10 MB × 3 berkas); pemantauan disk. **Firewall berlapis:** firewall konsol Tencent (lapis utama) dan `ufw`. VPS-1 dan VPS-2 membuka 22, 80, 443; port p2p 30303–30305 (TCP/UDP) **hanya dari IP VPS lawan**. MongoDB tidak mempublikasikan port ke host. Catatan: Docker melewati `ufw`, sehingga port internal ditulis `127.0.0.1:port:port` dan port p2p dibatasi di firewall konsol. Docker berjalan non-root bila memungkinkan.
+Berlaku pada **kedua VPS**: SSH hanya kunci publik; login root/password nonaktif; `fail2ban`; `unattended-upgrades`; swap 2 GB; log Docker dirotasi (10 MB × 3 berkas); pemantauan disk. **Firewall berlapis:** firewall konsol Tencent (lapis utama) dan `ufw`. VPS-1 dan VPS-2 membuka 22, 80, 443; port p2p 30303–30305 (TCP/UDP) **hanya dari IP VPS lawan**. MongoDB tidak mempublikasikan port ke host. Catatan: Docker melewati `ufw`, sehingga port internal ditulis `127.0.0.1:port:port` dan port p2p dibatasi di firewall konsol. Docker berjalan non-root bila memungkinkan. Log akses Caddy tidak memuat query string (SE-01).
 
 ### 18.9 Jalur menuju produksi (di luar prototype)
 
@@ -1340,6 +1363,7 @@ Mengikuti urutan kerja **[SUMBER]**: Analisis Kebutuhan → Perancangan Prototyp
 | R-21 | Domain belum ada: MetaMask butuh HTTPS untuk RPC jarak jauh; SIWE, cookie, dan CSP bergantung pada domain | Sedang | Sedang | Lokal dulu (`http://localhost`); domain dari env; uji ganti domain dan ikat ulang wallet |
 | R-22 | Konektivitas antar-VPS (p2p) terganggu atau latensi tinggi memperlambat blok | Sedang | Sedang | Region sama, `blockperiodseconds` awal 5, `requesttimeoutseconds` longgar, pantau jumlah peer |
 | R-23 | Kunci owner hilang atau bocor (owner tidak dapat dilepas, tetapi tanpa kunci rotasi wallet dan `pause` tidak mungkin; bila bocor, penyerang dapat mengganti wallet berwenang) | Rendah | Tinggi | Kunci owner terpisah dan offline, dua salinan terenkripsi di media berbeda, seed phrase di kertas; pindahkan ke alamat cadangan lewat `transferOwnership` bila ada indikasi bocor; bila hilang total, deploy contract baru dan baca dua alamat (SC-D1); owner multisig masuk peta jalan 18.9 |
+| R-24 | Operator kehilangan perangkat 2FA dan kode pemulihan sehingga terkunci | Sedang | Sedang | Kode pemulihan disimpan offline, `reset-mfa` lewat CLI oleh pengembang (tercatat), akun Operator cadangan |
 
 ---
 
@@ -1373,7 +1397,7 @@ Setiap pertanyaan sudah punya **default** sehingga pekerjaan tidak terhenti. Jik
 | Q-22 | Penyaluran massal (1 transaksi untuk banyak penerima) perlu di MVP? | Ya (Should) | Contract, UI | Sedang |
 | Q-23 | Perlu notifikasi (WhatsApp/email) ke penerima atau pihak lain? | Tidak | Lingkup | Rendah |
 | Q-24 | Bahasa: hanya Indonesia? | Ya | i18n | Rendah |
-| Q-25 | Status jaringan (`/network/status`) membaca daftar validator lewat API `QBFT`, sedangkan node RPC publik hanya membuka `ETH,NET,WEB3` (18.2 butir 7). Bagaimana jumlah validator dibaca? | Usulan: (a) endpoint internal ber-API-key, atau (b) hitung dari proposer blok terakhir / `net_peerCount` | Status jaringan, FR-CHN-02 | Sedang |
+| Q-25 | Status jaringan (`/network/status`) membaca daftar validator lewat API `QBFT`, sedangkan node RPC publik hanya membuka `ETH,NET,WEB3` (18.2 butir 7). Bagaimana jumlah validator dibaca? | **Daftar validator (alamat dan institusi) dibaca dari koleksi `settings`. Bila API `QBFT` tersedia pada endpoint internal, jumlah validator dihitung dari RPC; bila tidak, memakai daftar `settings`** (sesuai implementasi) | Status jaringan, FR-CHN-02 | **TERJAWAB** |
 
 ---
 
@@ -1418,6 +1442,25 @@ Setiap pertanyaan sudah punya **default** sehingga pekerjaan tidak terhenti. Jik
 | D-33 | `renounceOwnership()` dinonaktifkan (override selalu `revert RenounceDisabled()`); owner tetap dapat dipindah lewat `Ownable2Step` | **Final** (31 Okt 2026) | Owner hanya dipakai untuk rotasi wallet dan `pause`; melepasnya mematikan pemulihan tanpa menambah kepercayaan, karena owner tidak dapat mengubah catatan |
 | D-34 | Kontainer Besu memakai `network_mode: host`; port p2p 30303–30305 (node RPC memakai 30305) | **Final** (penyimpangan dari PRD v2.5, dicatat sebagai ADR) | Port p2p diatur langsung `ufw`; enode statis memakai IP host yang sama |
 | D-35 | Kunci validator dikirim langsung dari laptop ke VPS tujuan | **Final** (ADR) | Kunci validator 3–4 tidak pernah berada di VPS-1 |
+| D-36 | Data penerima hanya NIK, nama, alamat (dusun/RT/RW), telepon; program tanpa `unit` dan `kriteria` (kriteria ke deskripsi). Field UI KK, pekerjaan, penghasilan, tanggungan dihapus | **Final** (K1, 3 Nov 2026) | Minimisasi data (UU PDP); sesuai FR-REC-01 |
+| D-37 | Hanya data nyata di monitoring dan verifikasi; metrik ilustrasi dihapus | **Final** (K2) | FR-CHN-02 hanya meminta status, blok terakhir, jumlah validator |
+| D-38 | Impor CSV ditunda; UI disembunyikan di balik flag, endpoint tidak dibangun | **Final** (K3) | FR-REC-09 berprioritas opsional |
+| D-39 | Frontend memakai TanStack Query + React Hook Form + Zod + Zustand; SWR dihapus di akhir; tabel memakai komponen yang ada | **Final** (K4) | Sesuai PRD 8.3; mengganti tabel mengubah tampilan |
+| D-40 | Halaman publik informasi memakai *server-side fetch* + `revalidate`; interaktif memakai TanStack Query; Cek Status tetap `no-store` | **Final** (K5) | SEO dan performa mobile tanpa meng-cache data pribadi |
+| D-41 | Kode LPJ dan mode uji dihapus pada tahap akhir | **Final** (K6) | Tidak ada kode mati di build produksi |
+| D-42 | Konvensi DTO: tanpa `_id`/detail Mongo; daftar penyaluran sudah diperkaya (kode program, nama program, nama penerima, NIK tersamar) | **Final** | Hindari permintaan N+1 dan kebocoran detail internal |
+| D-43 | Pencarian NIK internal lewat `POST /recipients/search`; NIK tidak boleh di URL atau log akses | **Final** | Memenuhi SE-01 |
+| D-44 | Calldata `recordDisbursement` disusun server lewat `POST /disbursements/:id/tx-intent` setelah bukti ada (CID); server tidak menandatangani | **Final** | Calldata membutuhkan CID bukti |
+| D-45 | 2FA TOTP end-to-end: pendaftaran (`setup`/`enable`), 10 kode pemulihan sekali pakai, `disable` dilarang untuk Operator pada kebijakan produksi, sesi terbatas sampai 2FA aktif, `reset-mfa` lewat CLI | **Final** | Mitigasi T-16 dan R-05 bergantung pada 2FA Operator |
+| D-46 | Rute API lama dihapus setelah TOTP pindah ke `/api/v1/auth/login` | **Final** | Mengurangi permukaan serangan; frontend hanya memakai `/api/v1` |
+| D-47 | Sisa Vercel dihapus (analytics, gambar hero remote diganti berkas lokal); `.env.example` dibersihkan | **Final** | Aplikasi berjalan di VPS (D-28) |
+| D-48 | Seed demo (`seed:demo`), skrip skenario SP-01…SP-09 (`scenarios`), dan skrip beban (`perf:disbursement`) dengan bukti di `docs/evidence/` | **Final** | Menggantikan mode uji di UI (D-41); nominal program uji mengikuti Q-02 (masih Blocker) |
+| D-49 | Artefak infrastruktur `infra/` + `Dockerfile` dibuat sebagai kode; log akses Caddy tanpa query string | **Final** | Instal ulang terukur (FX-02) dan SE-01 |
+| D-50 | CI/CD dilengkapi: Slither, Solhint, gitleaks, build dan push image GHCR, Lighthouse desktop + mobile, deploy manual ber-persetujuan, Dependabot | **Final** | Sesuai PRD 18.5 dan KPI-4 |
+| D-51 | Dokumentasi operasional: ADR (tiap keputusan penyimpangan), `VERSIONS.md`, `VALIDATORS.md`, RUNBOOK diperluas, `docs/evidence/README.md` | **Final** | FR-SYS-04, R-01, R-23 |
+| D-52 | Banner pemeliharaan (polling `health/ready` 30 detik) dan SEO publik (`sitemap`, `robots`, metadata) | **Final** | FR-SYS-02 dan K5 |
+| D-53 | Status jaringan: daftar validator dari `settings`, dihitung dari API `QBFT` bila tersedia | **Final** (menutup Q-25) | Node RPC publik hanya membuka `ETH,NET,WEB3` |
+| D-54 | Fitur berprioritas S ditunda: penyaluran massal (FR-DSB-08), verifikasi integritas bukti (FR-EVD-06), ekspor PDF | **Final** | Di luar jalur kritis skripsi; kontrak tetap mendukung `recordDisbursementBatch` |
 
 ### 22.2 Temuan ketidakkonsistenan pada dokumen sumber
 
@@ -1456,6 +1499,8 @@ Setiap pertanyaan sudah punya **default** sehingga pekerjaan tidak terhenti. Jik
 | 2.5 | 28 Okt 2026 | Infrastruktur disesuaikan: 2 VPS × 4 GB (validator 2+2, RPC di VPS-2), MongoDB dan Next.js di VPS-1 (bukan Atlas/Vercel), Caddy menggantikan Nginx, domain sementara `bansosledger.com` dan jalur lokal-dulu (C-01, NG7, 7.1, 7.6, 8.x, 18.1 s.d. 18.10, T-11, T-17, R-01, R-14, R-19 s.d. R-22, Q-16, D-26 s.d. D-31) |
 | 2.6 | 29 Okt 2026 | Chain ID ditetapkan **250204** (18.2 butir 1, 18.3, 18.4, D-32) |
 | 2.7 | 31 Okt 2026 | `renounceOwnership()` dinonaktifkan (SC-D9, SC-Q7, D-33, R-23); penyimpangan infrastruktur yang disetujui dicatat: host network, port p2p 30303–30305, pengiriman kunci langsung (18.2 butir 5 dan 10, 18.8, D-34, D-35); cadangan kunci owner (18.7); Q-25 (status jaringan via API QBFT) ditambahkan |
+| 2.8 | 3 Nov 2026 | Keputusan integrasi frontend–backend dikunci: minimisasi data (NG8, D-36), data nyata saja (FR-DSH-03, D-37), impor CSV ditunda (FR-REC-09, D-38), stack frontend (D-39), render halaman publik (FR-PUB-09, D-40), hapus kode LPJ/mode uji (FR-SYS-05, D-41), konvensi DTO (D-42), pencarian NIK lewat POST (FR-REC-07, D-43), `tx-intent` (FR-DSB-13, D-44); SC-D9 dan SC-Q7 diperjelas (berlaku untuk siapa pun) |
+| 2.9 | 6 Nov 2026 | Keputusan prompt implementasi 12–18 dikunci: 2FA end-to-end (FR-AUTH-06 naik ke M, FR-AUTH-12 s.d. 14, FR-USR-05, API MFA dan `change-password`, R-24, D-45); pembersihan rute lama dan Vercel (FR-SYS-09, D-46, D-47); seed, skenario, dan beban (FR-SYS-03, 06, 07, D-48); infrastruktur sebagai kode (FR-SYS-08, D-49); CI/CD lengkap (18.5, D-50); dokumentasi (D-51); banner pemeliharaan dan SEO (FR-SYS-02, FR-PUB-10, D-52); Q-25 ditutup (FR-CHN-02, D-53); fitur S ditunda (D-54); Lampiran D |
 
 ---
 
@@ -1495,7 +1540,7 @@ Setiap pertanyaan sudah punya **default** sehingga pekerjaan tidak terhenti. Jik
 
 ## Lampiran B — Langkah Pertama Setelah PRD Disetujui
 
-1. Jawab pertanyaan **Blocker** yang tersisa (Q-02) dan yang berprioritas **Tinggi**. Q-01, Q-03, Q-04, Q-06, Q-07, Q-09, Q-12, Q-13 sudah terjawab.
+1. Jawab pertanyaan **Blocker** yang tersisa (Q-02) dan yang berprioritas **Tinggi**. Q-01, Q-03, Q-04, Q-06, Q-07, Q-09, Q-12, Q-13, Q-16, Q-25 sudah terjawab.
 2. Buat repositori dan salin dokumen ini ke `docs/PRD.md`.
 3. Kerjakan **M2 spike**: Besu 4 validator + MetaMask gas 0 + deploy contract percobaan. Hasilnya menentukan apakah R-02 menjadi masalah.
 4. Buat wireframe seluruh rute di Bagian 13.1 untuk evaluasi dengan Kelurahan (M1).
@@ -1522,3 +1567,16 @@ Dokumen ini adalah *source of truth* (Bagian 0.3). Item berikut harus disamakan 
 | 14 | Skripsi, PRD Word | Arsitektur (Gambar 3.2) dan uraiannya | Web2 dan MongoDB di VPS-1 (bukan cloud hosting/Atlas); 4 validator pada dua VPS (2+2), node RPC di VPS-2 | C-01, D-26 s.d. D-28 |
 | 15 | Skripsi | Batasan penelitian | Ganti "satu VPS" menjadi "dua VPS (2+2) yang dikelola satu pihak"; satu VPS mati menghentikan jaringan sementara | R-01 |
 | 16 | Skripsi | Perancangan smart contract / Pemisahan Otorisasi | Tambahkan bahwa `renounceOwnership()` dinonaktifkan; owner hanya untuk rotasi wallet dan `pause`, dan kepemilikan hanya dapat dipindah lewat `Ownable2Step` | SC-D9, D-33 |
+| 17 | Skripsi, PRD Word | Data penerima dan fitur | Data penerima hanya NIK, nama, alamat, telepon; impor CSV ditunda | NG8, D-36, D-38 |
+
+## Lampiran D — Peta Prompt Implementasi 12–18
+
+| Prompt | Isi | Rujukan PRD |
+| --- | --- | --- |
+| 12 | 2FA TOTP end-to-end (setup, enable, disable, kode pemulihan, sesi terbatas, UI, `reset-mfa`) | FR-AUTH-06, 12–14, FR-USR-05, D-45, R-24 |
+| 13 | Hapus rute lama dan sisa Vercel, bersihkan `.env.example`, ganti `docs/PRD.md` | FR-SYS-09, D-46, D-47 |
+| 14 | Seed demo, skrip skenario SP-01…SP-09, skrip beban | FR-SYS-03, 06, 07, 17.1, D-48 |
+| 15 | Artefak infrastruktur (Dockerfile, compose, Caddyfile, skrip backup/deploy/watchdog/bootstrap) | FR-SYS-04, 08, 18.1–18.10, D-49 |
+| 16 | CI/CD lengkap (Slither, Solhint, gitleaks, GHCR, Lighthouse desktop + mobile, deploy manual) | 18.5, KPI-4, D-50 |
+| 17 | ADR, `VERSIONS.md`, `VALIDATORS.md`, RUNBOOK, evidence | FR-SYS-04, R-01, R-23, D-51 |
+| 18 | Banner pemeliharaan, `sitemap`, `robots`, metadata | FR-SYS-02, FR-PUB-10, D-52 |
