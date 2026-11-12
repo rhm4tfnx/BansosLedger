@@ -12,6 +12,8 @@ import type {
   PublicLedgerItemViewModel,
   PublicProgramDetailViewModel,
   PublicProgramViewModel,
+  PublicRecentDisbursementItemViewModel,
+  PublicRecentDisbursementsViewModel,
   PublicStatusCheckViewModel,
   PublicSummaryViewModel,
 } from '@/types'
@@ -106,6 +108,71 @@ export function toPublicProgramDetailViewModel(
       limit: dto.ledger.limit,
       totalPages: dto.ledger.totalPages,
     },
+  }
+}
+
+export function aggregatePublicRecentDisbursements(
+  details: readonly PublicProgramDetailViewModel[],
+  options: {
+    isProgramListTruncated?: boolean
+    failedPrograms?: readonly string[]
+  } = {},
+): PublicRecentDisbursementsViewModel {
+  const seenKeys = new Set<string>()
+  const merged: PublicRecentDisbursementItemViewModel[] = []
+  let isTruncated = Boolean(options.isProgramListTruncated)
+
+  for (const detail of details) {
+    if (detail.ledger.total > detail.ledger.items.length || detail.ledger.totalPages > 1) {
+      isTruncated = true
+    }
+    for (let idx = 0; idx < detail.ledger.items.length; idx++) {
+      const item = detail.ledger.items[idx]!
+      const normalizedTxHash = item.txHash ? item.txHash.trim().toLowerCase() : null
+      const dedupeKey = normalizedTxHash
+        ? `tx:${normalizedTxHash}:${detail.program.code}:${item.periodId}`
+        : `fallback:${detail.program.code}:${item.periodId}:${item.amount}:${item.time ?? idx}`
+
+      if (seenKeys.has(dedupeKey)) continue
+      seenKeys.add(dedupeKey)
+
+      merged.push({
+        ...item,
+        programCode: detail.program.code,
+        programName: detail.program.name,
+        kindLabel: detail.program.kindLabel,
+      })
+    }
+  }
+
+  merged.sort((a, b) => {
+    const timeA = a.time ? Date.parse(a.time) : Number.NaN
+    const timeB = b.time ? Date.parse(b.time) : Number.NaN
+    const validA = Number.isFinite(timeA)
+    const validB = Number.isFinite(timeB)
+
+    if (validA && validB && timeA !== timeB) {
+      return timeB - timeA
+    }
+    if (validA && !validB) return -1
+    if (!validA && validB) return 1
+
+    if (a.periodId !== b.periodId) {
+      return b.periodId - a.periodId
+    }
+    if (a.programCode !== b.programCode) {
+      return a.programCode.localeCompare(b.programCode)
+    }
+    return (a.txHash ?? '').localeCompare(b.txHash ?? '')
+  })
+
+  const failedPrograms = [...(options.failedPrograms ?? [])]
+  return {
+    items: merged,
+    totalFetched: merged.length,
+    isTruncated,
+    partialFailureCount: failedPrograms.length,
+    failedPrograms,
   }
 }
 

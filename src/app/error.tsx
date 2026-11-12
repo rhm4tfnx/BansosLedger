@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 
 export default function RootError({
   error,
@@ -39,8 +40,9 @@ export default function RootError({
           </button>
           <Link
             href="/"
-            className="inline-flex min-h-11 items-center justify-center rounded-control border bg-white px-5 py-2.5 text-sm font-medium text-primary hover:bg-secondary"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border bg-white px-5 py-2.5 text-sm font-medium text-primary hover:bg-secondary"
           >
+            <ArrowLeft size={15} aria-hidden="true" />
             Kembali ke beranda
           </Link>
         </div>

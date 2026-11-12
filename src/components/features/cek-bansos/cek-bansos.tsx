@@ -188,12 +188,14 @@ export function CekBansos() {
           TxHash. Alamat dan nomor telepon tidak pernah ditampilkan.
         </p>
 
-        <Link
-          href="/cara-verifikasi"
-          className="mt-3 inline-flex min-h-11 items-center font-mono text-xs text-primary-hover hover:underline"
-        >
-          Cara memeriksa transaksi
-        </Link>
+        <div className="mt-4">
+          <Link
+            href="/cara-verifikasi"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border bg-surface px-4 py-2.5 font-mono text-xs font-medium text-primary-hover transition-colors hover:bg-secondary"
+          >
+            Cara memeriksa transaksi
+          </Link>
+        </div>
 
         <section aria-labelledby="hasil-verifikasi" className="mt-8">
           <h2 id="hasil-verifikasi" className="mb-5 font-sans text-2xl font-medium tracking-tight">

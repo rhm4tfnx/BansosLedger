@@ -22,6 +22,7 @@ import type {
   NetworkStatusViewModel,
   PaginatedResult,
   PublicProgramViewModel,
+  PublicRecentDisbursementsViewModel,
   PublicSummaryViewModel,
 } from '@/types'
 
@@ -32,6 +33,8 @@ export interface TransparencyDashboardProps {
   summaryUnavailable?: boolean
   initialPrograms?: PaginatedResult<PublicProgramViewModel>
   programsUnavailable?: boolean
+  initialTransactions?: PublicRecentDisbursementsViewModel
+  transactionsUnavailable?: boolean
   initialNetwork?: NetworkStatusViewModel
   networkUnavailable?: boolean
   initialValidators?: { items: ExplorerValidatorViewModel[]; count: number | null }
@@ -44,6 +47,8 @@ export function TransparencyDashboard({
   summaryUnavailable = false,
   initialPrograms,
   programsUnavailable = false,
+  initialTransactions,
+  transactionsUnavailable = false,
   initialNetwork,
   networkUnavailable = false,
   initialValidators,
@@ -66,7 +71,11 @@ export function TransparencyDashboard({
   const validatorsQuery = useExplorerValidatorsQuery(!initialValidators && !networkUnavailable)
 
   const summary = summaryQuery.data ?? initialSummary
-  const programs = programsQuery.data?.items ?? initialPrograms?.items ?? []
+  const programsData = programsQuery.data ?? initialPrograms
+  const programs = programsData?.items ?? []
+  const isProgramListTruncated = Boolean(
+    programsData && (programsData.totalPages > 1 || programsData.total > programs.length),
+  )
   const network = networkQuery.data ?? initialNetwork
   const validators = validatorsQuery.data ?? initialValidators
 
@@ -240,9 +249,9 @@ export function TransparencyDashboard({
             </div>
             <Link
               href="/program"
-              className="inline-flex min-h-11 items-center gap-1 font-mono text-xs text-primary hover:underline"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
             >
-              Semua program <ArrowUpRight size={14} />
+              Semua program <ArrowUpRight size={14} aria-hidden="true" />
             </Link>
           </header>
           <div data-reveal className="overflow-hidden rounded-control border bg-white">
@@ -315,6 +324,12 @@ export function TransparencyDashboard({
         </section>
 
         <TransparencyTransactions
+          programs={programs}
+          isProgramListTruncated={isProgramListTruncated}
+          programsLoading={programsQuery.isLoading && !programsData}
+          programsUnavailable={isProgramsUnavailable}
+          initialTransactions={initialTransactions}
+          transactionsUnavailable={transactionsUnavailable}
           initialBlocks={initialBlocks}
           unavailable={blocksUnavailable}
         />
@@ -418,12 +433,12 @@ export function TransparencyDashboard({
                     Daftar alamat validator belum diekspos oleh RPC publik ({validators?.count ?? '-'}).
                   </p>
                 )}
-                <div className="mt-4">
+                <div className="mt-5">
                   <Link
                     href="/explorer/validator"
-                    className="inline-flex min-h-11 items-center gap-1 font-mono text-xs text-primary hover:underline"
+                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
                   >
-                    Lihat halaman validator <ArrowUpRight size={14} />
+                    Lihat halaman validator <ArrowUpRight size={14} aria-hidden="true" />
                   </Link>
                 </div>
               </article>

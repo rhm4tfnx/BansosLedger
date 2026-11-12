@@ -390,12 +390,12 @@
   overflow: hidden;
 }
 .list header {
-  padding: 22px 22px 0;
+  padding: 22px 24px 0;
 }
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  padding: 0 20px;
+  padding: 0 24px;
   gap: 5px;
 }
 .tabs button {
@@ -411,7 +411,7 @@
 .filters {
   display: flex;
   flex-wrap: wrap;
-  padding: 18px 20px;
+  padding: 18px 24px;
   gap: 10px;
 }
 .filters input {
@@ -561,9 +561,28 @@
   background: #465fff;
   border-radius: 5px;
 }
-.tableFooter,
+.listFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 24px 18px;
+  border-top: 1px solid #eaecf0;
+  background: #fff;
+}
+.listFooter > nav {
+  padding: 0;
+  flex-wrap: wrap;
+}
+.tableFooter {
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #667085;
+  text-align: left;
+}
 .empty {
-  padding: 15px 22px;
+  padding: 15px 24px;
 }
 .form {
   display: grid;
@@ -688,6 +707,16 @@
   }
   .filters {
     flex-direction: column;
+    padding: 16px;
+  }
+  .list header {
+    padding: 18px 16px 0;
+  }
+  .tabs {
+    padding: 0 16px;
+  }
+  .listFooter {
+    padding: 14px 16px 16px;
   }
   .heading small {
     font-size: 10px;

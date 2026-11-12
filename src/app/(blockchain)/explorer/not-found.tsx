@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 
 export default function ExplorerNotFound() {
   return (
@@ -17,14 +18,16 @@ export default function ExplorerNotFound() {
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
             href="/explorer"
-            className="inline-flex min-h-11 items-center justify-center rounded-control bg-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-hover"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-hover"
           >
+            <ArrowLeft size={15} aria-hidden="true" />
             Kembali ke Explorer
           </Link>
           <Link
             href="/transparansi"
-            className="inline-flex min-h-11 items-center justify-center rounded-control border bg-white px-5 py-2.5 text-sm font-medium text-primary hover:bg-secondary"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border bg-white px-5 py-2.5 text-sm font-medium text-primary hover:bg-secondary"
           >
+            <ArrowLeft size={15} aria-hidden="true" />
             Kembali ke ringkasan publik
           </Link>
         </div>

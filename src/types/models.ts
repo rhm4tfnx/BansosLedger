@@ -453,6 +453,20 @@ export interface PublicProgramDetailViewModel {
   ledger: PaginatedResult<PublicLedgerItemViewModel>
 }
 
+export interface PublicRecentDisbursementItemViewModel extends PublicLedgerItemViewModel {
+  programCode: string
+  programName: string
+  kindLabel: string
+}
+
+export interface PublicRecentDisbursementsViewModel {
+  items: PublicRecentDisbursementItemViewModel[]
+  totalFetched: number
+  isTruncated: boolean
+  partialFailureCount: number
+  failedPrograms: string[]
+}
+
 export interface PublicStatusEntryViewModel {
   programCode: string
   programName: string

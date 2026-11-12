@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { SiteHeader } from '@/components/features/navigation/site-header'
 import { SiteFooter } from '@/components/features/navigation/site-footer'
 
@@ -21,8 +22,9 @@ export default function PublicNotFound() {
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href="/transparansi"
-              className="inline-flex min-h-11 items-center justify-center rounded-control bg-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-hover"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-hover"
             >
+              <ArrowLeft size={15} aria-hidden="true" />
               Kembali ke ringkasan publik
             </Link>
             <Link

@@ -6,6 +6,7 @@ import {
   fetchPublicNetworkStatusServer,
   fetchPublicProgramsServer,
   fetchPublicRecentBlocksServer,
+  fetchPublicRecentDisbursementsServer,
   fetchPublicSummaryServer,
   fetchPublicValidatorsServer,
 } from '@/lib/api/server-public'
@@ -27,6 +28,16 @@ export default async function TransparencyPage() {
     fetchPublicRecentBlocksServer(6),
   ])
 
+  const transactionsRes = programsRes.ok
+    ? await fetchPublicRecentDisbursementsServer(programsRes.data.items, {
+        isProgramListTruncated:
+          programsRes.data.totalPages > 1 ||
+          programsRes.data.total > programsRes.data.items.length,
+        perProgramLimit: 20,
+        maxPrograms: 10,
+      })
+    : null
+
   return (
     <ScrollReveal>
       <TransparencyDashboard
@@ -34,6 +45,8 @@ export default async function TransparencyPage() {
         summaryUnavailable={!summaryRes.ok}
         initialPrograms={programsRes.ok ? programsRes.data : undefined}
         programsUnavailable={!programsRes.ok}
+        initialTransactions={transactionsRes?.ok ? transactionsRes.data : undefined}
+        transactionsUnavailable={transactionsRes ? !transactionsRes.ok : !programsRes.ok}
         initialNetwork={networkRes.ok ? networkRes.data : undefined}
         networkUnavailable={!networkRes.ok}
         initialValidators={validatorsRes.ok ? validatorsRes.data : undefined}

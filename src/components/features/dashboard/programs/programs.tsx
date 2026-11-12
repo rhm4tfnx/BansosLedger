@@ -558,15 +558,17 @@ function ProgramsContent() {
               </table>
             )}
           </div>
-          {list.data && (
-            <Pager
-              page={list.data.page}
-              totalPages={list.data.totalPages}
-              total={list.data.total}
-              onPage={(next) => params.set({ page: next }, false)}
-            />
-          )}
-          <p className={s.tableFooter}>Tidak tersedia hard delete</p>
+          <footer className={s.listFooter}>
+            {list.data && (
+              <Pager
+                page={list.data.page}
+                totalPages={list.data.totalPages}
+                total={list.data.total}
+                onPage={(next) => params.set({ page: next }, false)}
+              />
+            )}
+            <p className={s.tableFooter}>Tidak tersedia hard delete</p>
+          </footer>
         </section>
         <section
           ref={detailSectionRef}

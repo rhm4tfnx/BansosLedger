@@ -17,6 +17,7 @@ import type {
   PaginatedResult,
   PublicProgramDetailViewModel,
   PublicProgramViewModel,
+  PublicRecentDisbursementsViewModel,
   PublicSummaryViewModel,
 } from '@/types'
 import { toNetworkStatusViewModel } from './adapters/chain'
@@ -25,6 +26,7 @@ import {
   toExplorerValidatorsViewModel,
 } from './adapters/explorer'
 import {
+  aggregatePublicRecentDisbursements,
   toPublicProgramDetailViewModel,
   toPublicProgramListViewModel,
   toPublicSummaryViewModel,
@@ -156,5 +158,54 @@ export async function fetchPublicRecentBlocksServer(
     explorerBlockListDtoSchema,
     toExplorerBlockListViewModel,
   )
+}
+
+export async function fetchPublicRecentDisbursementsServer(
+  programs: readonly PublicProgramViewModel[],
+  options: {
+    isProgramListTruncated?: boolean
+    perProgramLimit?: number
+    maxPrograms?: number
+  } = {},
+): Promise<ServerFetchResult<PublicRecentDisbursementsViewModel>> {
+  const { isProgramListTruncated = false, perProgramLimit = 20, maxPrograms = 10 } = options
+  const bounded = programs.slice(0, maxPrograms)
+  const isTruncated = isProgramListTruncated || programs.length > maxPrograms
+
+  if (bounded.length === 0) {
+    return {
+      ok: true,
+      data: aggregatePublicRecentDisbursements([], { isProgramListTruncated: isTruncated }),
+    }
+  }
+
+  const results = await Promise.all(
+    bounded.map((p) => fetchPublicProgramDetailServer(p.code, 1, perProgramLimit)),
+  )
+
+  const details: PublicProgramDetailViewModel[] = []
+  const failedPrograms: string[] = []
+  let firstFailure: Extract<ServerFetchResult<unknown>, { ok: false }> | null = null
+
+  results.forEach((res, idx) => {
+    if (res.ok) {
+      details.push(res.data)
+    } else {
+      failedPrograms.push(bounded[idx]?.code ?? String(idx))
+      if (!firstFailure) firstFailure = res
+    }
+  })
+
+  if (details.length === 0 && firstFailure) {
+    return firstFailure
+  }
+
+  return {
+    ok: true,
+    data: aggregatePublicRecentDisbursements(details, {
+      isProgramListTruncated: isTruncated,
+      failedPrograms,
+    }),
+  }
 }
 

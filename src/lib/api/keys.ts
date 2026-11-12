@@ -58,6 +58,8 @@ export const queryKeys = {
     programs: (filters: Record<string, unknown> = {}) => ['public', 'programs', filters] as const,
     programDetail: (code: string, page = 1, limit = 20) =>
       ['public', 'programs', 'detail', code, { page, limit }] as const,
+    recentDisbursements: (codes: readonly string[], perProgramLimit = 20) =>
+      ['public', 'recent-disbursements', { codes, perProgramLimit }] as const,
   },
   explorer: {
     all: ['explorer'] as const,

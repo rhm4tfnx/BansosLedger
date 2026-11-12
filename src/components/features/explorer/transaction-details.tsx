@@ -56,18 +56,18 @@ export function TransactionDetails({ txHash }: TransactionDetailsProps) {
               />
             </span>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <Link
               href="/transparansi"
-              className="inline-flex min-h-11 items-center text-xs text-primary hover:underline"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border bg-white px-3.5 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
             >
               Ringkasan publik
             </Link>
             <Link
               href="/explorer"
-              className="inline-flex min-h-11 items-center gap-2 text-xs text-primary hover:underline"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border bg-white px-3.5 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
             >
-              <ArrowLeft size={14} />
+              <ArrowLeft size={14} aria-hidden="true" />
               Explorer
             </Link>
           </div>

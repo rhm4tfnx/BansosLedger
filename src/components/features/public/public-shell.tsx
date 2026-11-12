@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import { SiteHeader } from '@/components/features/navigation/site-header'
 
 export function PublicShell({ title, children }: { title: string; children: ReactNode }) {
@@ -17,11 +18,12 @@ export function PublicShell({ title, children }: { title: string; children: Reac
         <header>
           <Link
             href="/transparansi"
-            className="inline-flex min-h-11 items-center text-sm text-primary underline"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
           >
+            <ArrowLeft size={14} aria-hidden="true" />
             Kembali ke ringkasan publik
           </Link>
-          <h1 className="mt-2 max-w-3xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
+          <h1 className="mt-5 max-w-3xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
             {title}
           </h1>
           <p className="mt-3 text-sm text-body-copy">

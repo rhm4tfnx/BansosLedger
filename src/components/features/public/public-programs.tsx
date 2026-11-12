@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { usePublicProgramDetailQuery, usePublicProgramsQuery } from '@/lib/api/hooks/public'
 import type {
   PaginatedResult,
@@ -188,14 +188,15 @@ export function PublicProgramDetail({
       <section className={publicPanel}>
         <Link
           href="/program"
-          className="inline-flex min-h-11 items-center text-primary underline"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
         >
+          <ArrowLeft size={14} aria-hidden="true" />
           Semua program
         </Link>
         {p && (
           <>
             {p.description && (
-              <p className="mt-2 text-sm text-muted-foreground">{p.description}</p>
+              <p className="mt-4 text-sm text-muted-foreground">{p.description}</p>
             )}
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
               {[

@@ -12,10 +12,12 @@ import type {
   PaginatedResult,
   PublicProgramDetailViewModel,
   PublicProgramViewModel,
+  PublicRecentDisbursementsViewModel,
   PublicStatusCheckViewModel,
   PublicSummaryViewModel,
 } from '@/types'
 import {
+  aggregatePublicRecentDisbursements,
   toPublicProgramDetailViewModel,
   toPublicProgramListViewModel,
   toPublicStatusCheckViewModel,
@@ -102,6 +104,82 @@ export function usePublicProgramDetailQuery(
       return toPublicProgramDetailViewModel(dto)
     },
     enabled: Boolean(code) && enabled,
+    ...(initialData !== undefined ? { initialData } : {}),
+  })
+}
+
+export interface PublicRecentDisbursementsQueryOptions {
+  programs?: readonly PublicProgramViewModel[]
+  isProgramListTruncated?: boolean
+  perProgramLimit?: number
+  maxPrograms?: number
+  enabled?: boolean
+  initialData?: PublicRecentDisbursementsViewModel
+}
+
+export function usePublicRecentDisbursementsQuery(
+  options: PublicRecentDisbursementsQueryOptions = {},
+) {
+  const {
+    programs = [],
+    isProgramListTruncated = false,
+    perProgramLimit = 20,
+    maxPrograms = 10,
+    enabled = true,
+    initialData,
+  } = options
+
+  const boundedPrograms = programs.slice(0, maxPrograms)
+  const codes = boundedPrograms.map((p) => p.code)
+  const isTruncatedByProgramCap = isProgramListTruncated || programs.length > maxPrograms
+
+  return useQuery<PublicRecentDisbursementsViewModel, ApiClientError>({
+    queryKey: queryKeys.public.recentDisbursements(codes, perProgramLimit),
+    queryFn: async ({ signal }) => {
+      if (codes.length === 0) {
+        return aggregatePublicRecentDisbursements([], {
+          isProgramListTruncated: isTruncatedByProgramCap,
+        })
+      }
+
+      const settled = await Promise.allSettled(
+        codes.map(async (code) => {
+          const path = buildApiPath(`/api/v1/public/programs/${encodeURIComponent(code)}`, {
+            page: 1,
+            limit: perProgramLimit,
+          })
+          const dto = await apiFetch(path, {
+            schema: publicProgramDetailDtoSchema,
+            signal,
+          })
+          return toPublicProgramDetailViewModel(dto)
+        }),
+      )
+
+      const details: PublicProgramDetailViewModel[] = []
+      const failedPrograms: string[] = []
+      let firstError: unknown = null
+
+      settled.forEach((res, idx) => {
+        if (res.status === 'fulfilled') {
+          details.push(res.value)
+        } else {
+          failedPrograms.push(codes[idx] ?? String(idx))
+          if (!firstError) firstError = res.reason
+        }
+      })
+
+      if (details.length === 0 && firstError) {
+        throw firstError
+      }
+
+      return aggregatePublicRecentDisbursements(details, {
+        isProgramListTruncated: isTruncatedByProgramCap,
+        failedPrograms,
+      })
+    },
+    enabled,
+    staleTime: 30_000,
     ...(initialData !== undefined ? { initialData } : {}),
   })
 }

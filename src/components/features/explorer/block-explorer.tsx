@@ -375,9 +375,9 @@ export function BlockExplorer() {
                 </div>
                 <Link
                   href="/explorer/validator"
-                  className="inline-flex min-h-11 items-center font-mono text-xs text-primary hover:underline"
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control border bg-white px-3.5 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
                 >
-                  Detail validator →
+                  Detail validator <ArrowUpRight size={14} aria-hidden="true" />
                 </Link>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

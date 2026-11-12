@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 
 export default function ExplorerError({
   reset,
@@ -38,8 +39,9 @@ export default function ExplorerError({
           </Link>
           <Link
             href="/transparansi"
-            className="inline-flex min-h-11 items-center justify-center rounded-control border bg-white px-5 py-2.5 text-sm font-medium text-primary hover:bg-secondary"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border bg-white px-5 py-2.5 text-sm font-medium text-primary hover:bg-secondary"
           >
+            <ArrowLeft size={15} aria-hidden="true" />
             Kembali ke ringkasan publik
           </Link>
         </div>
