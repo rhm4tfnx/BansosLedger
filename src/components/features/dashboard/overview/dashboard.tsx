@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Users, Layers, ArrowLeftRight, Search, ArrowUpRight, Plus, RotateCw, Download, ShieldCheck, Clock3, X, ArrowRight, CheckCircle2, AlertTriangle, CircleDashed } from 'lucide-react'
+import { Users, Layers, ArrowLeftRight, Search, ArrowUpRight, Download, ShieldCheck, Clock3, X, ArrowRight, CheckCircle2, AlertTriangle, CircleDashed } from 'lucide-react'
 import { DistributionCharts } from './distribution-charts'
 import { useDashboardSearch } from '../dashboard-shell'
 import { useRoleAccess } from '@/hooks/use-role-access'
 import { useRouter } from 'next/navigation'
 import { useDashboardSummaryQuery, useNetworkStatusQuery } from '@/lib/api/hooks'
 import type { DashboardRecentTxViewModel } from '@/types'
-import { COMING_SOON_TITLE, EmptyState, ErrorState, TableSkeleton } from '../shared/states'
+import { EmptyState, ErrorState, TableSkeleton } from '../shared/states'
 import { HashLink } from '../shared/hash-link'
 import styles from './dashboard.module.css'
 
@@ -73,18 +73,6 @@ export function Dashboard() {
             <button onClick={() => router.push('/dashboard/laporan')}>
               <Download size={16} />
               Unduh laporan
-            </button>
-          )}
-          {can('transaction:sign') && (
-            <button disabled title={COMING_SOON_TITLE}>
-              <RotateCw size={16} />
-              Retry pending
-            </button>
-          )}
-          {can('disbursement:create') && (
-            <button className={styles.primaryButton} disabled title={COMING_SOON_TITLE}>
-              <Plus size={17} />
-              Salurkan batch baru
             </button>
           )}
         </div>

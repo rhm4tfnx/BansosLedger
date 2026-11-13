@@ -1,4 +1,4 @@
-import { POST as login } from '@/app/api/auth/login/route'
+import { login } from '@/modules/auth/service'
 import { asV1 } from '@/lib/auth/v1'
 export const runtime = 'nodejs'
 export const POST = (request: Request) => asV1(login, request)

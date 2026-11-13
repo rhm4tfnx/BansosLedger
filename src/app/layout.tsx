@@ -1,4 +1,3 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Mona_Sans, Geist_Mono } from 'next/font/google'
 import { headers } from 'next/headers'
@@ -57,7 +56,6 @@ export default async function RootLayout({
     <html lang="id" data-nonce={nonce ? 'present' : undefined}>
       <body className={`${monaSans.variable} ${monoSpace.variable} antialiased`}>
         <QueryProvider>{children}</QueryProvider>
-        {process.env.NODE_ENV === 'production' && process.env.VERCEL === '1' && <Analytics />}
       </body>
     </html>
   )

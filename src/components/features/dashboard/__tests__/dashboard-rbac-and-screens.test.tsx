@@ -10,7 +10,6 @@ import { NetworkMonitoring } from '@/components/features/dashboard/monitoring/ne
 import { Recipients } from '@/components/features/dashboard/recipients/recipients'
 import { Reports } from '@/components/features/dashboard/reports/reports'
 import AccountSettings from '@/components/features/dashboard/settings/account-settings'
-import { COMING_SOON_TITLE } from '@/components/features/dashboard/shared/states'
 import { Verification } from '@/components/features/dashboard/verification/verification'
 import { WalletRegistry } from '@/components/features/dashboard/wallet/wallet-registry'
 import { RoleAccessProvider } from '@/hooks/use-role-access'

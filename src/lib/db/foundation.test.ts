@@ -10,11 +10,10 @@ import { connectDatabase } from './connection'
 import { canonicalJSON, redact } from '../../modules/audit/service'
 import { isSameOriginRequest } from '../auth/request-origin'
 import { getSessionCookieOptions, tokenHash } from '../auth/session'
-import { POST as login } from '../../app/api/auth/login/route'
-import { POST as logout } from '../../app/api/auth/logout/route'
-import { GET as session } from '../../app/api/auth/session/route'
-import { POST as nonce, PATCH as bind } from '../../app/api/auth/wallet/route'
 import { POST as v1login } from '../../app/api/v1/auth/login/route'
+import { POST as v1logout } from '../../app/api/v1/auth/logout/route'
+import { POST as v1nonce } from '../../app/api/v1/auth/wallet/nonce/route'
+import { POST as v1bind } from '../../app/api/v1/auth/wallet/bind/route'
 import { POST as changePassword } from '../../app/api/v1/auth/change-password/route'
 import { GET as me } from '../../app/api/v1/auth/me/route'
 
@@ -31,17 +30,12 @@ test('model imports do not connect and required indexes exist', () => {
   }
 })
 
-test('missing database returns 503 for every legacy auth handler and v1 uses problem JSON', async () => {
+test('missing database returns 503 for every v1 auth handler using problem JSON', async () => {
   const saved = process.env.MONGODB_URI
   delete process.env.MONGODB_URI
   try {
     await assert.rejects(connectDatabase, /Layanan belum dikonfigurasi/)
-    for (const handler of [login, logout, session, nonce, bind]) {
-      const response = await handler(new Request('http://localhost/api/auth', { method: 'POST' }))
-      assert.equal(response.status, 503)
-      assert.deepEqual(await response.json(), { message: 'Layanan belum dikonfigurasi.' })
-    }
-    for (const handler of [v1login, changePassword, me]) {
+    for (const handler of [v1login, v1logout, v1nonce, v1bind, changePassword, me]) {
       const response = await handler(new Request('http://localhost/api/v1/auth', { method: 'POST' }))
       assert.equal(response.status, 503)
       assert.match(response.headers.get('content-type') || '', /application\/problem\+json/)
@@ -63,7 +57,7 @@ test('standalone MongoDB uses Mongoose 8 without transaction APIs', () => {
   assert.match(mongoose.version, /^8\./)
   assert.equal(Counters.schema.path('hash'), undefined)
   assert.ok(AuditLogs.schema.path('note'))
-  const files = ['src/modules/audit/service.ts', 'src/lib/auth/session.ts', 'scripts/accounts.ts', 'src/app/api/auth/login/route.ts', 'src/app/api/auth/logout/route.ts', 'src/app/api/auth/wallet/route.ts', 'src/app/api/v1/auth/change-password/route.ts']
+  const files = ['src/modules/audit/service.ts', 'src/lib/auth/session.ts', 'scripts/accounts.ts', 'src/modules/auth/service.ts', 'src/app/api/v1/auth/login/route.ts', 'src/app/api/v1/auth/logout/route.ts', 'src/app/api/v1/auth/wallet/nonce/route.ts', 'src/app/api/v1/auth/wallet/bind/route.ts', 'src/app/api/v1/auth/change-password/route.ts']
   for (const file of files) assert.doesNotMatch(readFileSync(file, 'utf8'), /ClientSession|startSession|\.transaction\s*\(|\.session\s*\(|session:\s*(?:transaction|session)/, file)
 })
 
