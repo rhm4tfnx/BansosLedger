@@ -845,7 +845,7 @@ function RecipientDetail({ id, onClose }: { id: string; onClose: () => void }) {
               </p>
               <strong>Komitmen keccak256 FINAL</strong>
               {r.commitment ? (
-                <HashLink hash={r.commitment} short={r.commitmentShort} />
+                <HashLink hash={r.commitment} short={r.commitmentShort} kind="search" />
               ) : (
                 <code>Belum dibentuk. Komitmen disimpan saat status dikunci FINAL.</code>
               )}

@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import { NetworkWidget } from '@/components/features/dashboard/monitoring/network-widget'
 import networkStyles from '@/components/features/dashboard/monitoring/monitoring.module.css'
@@ -16,7 +17,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function ExplorerPage() {
   return (
     <ScrollReveal>
-      <BlockExplorer />
+      <Suspense fallback={null}>
+        <BlockExplorer />
+      </Suspense>
       <div className={networkStyles.publicWidget}>
         <NetworkWidget />
       </div>

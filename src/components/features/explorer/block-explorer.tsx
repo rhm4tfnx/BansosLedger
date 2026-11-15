@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, ArrowLeft, ArrowUpRight, Box, Network, Search, ShieldCheck } from 'lucide-react'
 import { formatApiError } from '@/lib/api/errors'
 import { useNetworkStatusQuery } from '@/lib/api/hooks/chain'
@@ -14,6 +14,8 @@ import {
 
 export function BlockExplorer() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const qParam = searchParams.get('q') ?? ''
   const [query, setQuery] = useState('')
   const [submittedQuery, setSubmittedQuery] = useState('')
   const [searchError, setSearchError] = useState('')
@@ -28,29 +30,8 @@ export function BlockExplorer() {
   const validatorsQuery = useExplorerValidatorsQuery()
   const searchQuery = useExplorerSearchQuery(submittedQuery, Boolean(submittedQuery))
 
-  useEffect(() => {
-    const result = searchQuery.data
-    if (!result || !submittedQuery) return
-    if (result.kind === 'block') {
-      router.push(`/explorer/block/${result.block.number}`)
-    } else if (result.kind === 'tx') {
-      router.push(`/explorer/tx/${result.tx.txHash}`)
-    } else if (result.kind === 'address') {
-      router.push(`/explorer/address/${result.address.address}`)
-    } else if (result.kind === 'events' && result.events.length === 1 && result.events[0]?.txHash) {
-      router.push(`/explorer/tx/${result.events[0].txHash}`)
-    }
-  }, [router, searchQuery.data, submittedQuery])
-
-  const isChainNotConfigured =
-    blocksQuery.error?.code === 'CHAIN_NOT_CONFIGURED' ||
-    networkQuery.error?.code === 'CHAIN_NOT_CONFIGURED' ||
-    validatorsQuery.error?.code === 'CHAIN_NOT_CONFIGURED' ||
-    searchQuery.error?.code === 'CHAIN_NOT_CONFIGURED'
-
-  function handleSearchSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const raw = query.trim().replace(/^#/, '')
+  function executeSearch(input: string) {
+    const raw = input.trim().replace(/^#/, '')
     if (!raw) return
 
     if (/^\d{16}$/.test(raw)) {
@@ -75,6 +56,38 @@ export function BlockExplorer() {
 
     setSearchError('')
     setSubmittedQuery(raw)
+  }
+
+  useEffect(() => {
+    const trimmed = qParam.trim()
+    if (!trimmed) return
+    setQuery(trimmed)
+    executeSearch(trimmed)
+  }, [qParam])
+
+  useEffect(() => {
+    const result = searchQuery.data
+    if (!result || !submittedQuery) return
+    if (result.kind === 'block') {
+      router.push(`/explorer/block/${result.block.number}`)
+    } else if (result.kind === 'tx') {
+      router.push(`/explorer/tx/${result.tx.txHash}`)
+    } else if (result.kind === 'address') {
+      router.push(`/explorer/address/${result.address.address}`)
+    } else if (result.kind === 'events' && result.events.length === 1 && result.events[0]?.txHash) {
+      router.push(`/explorer/tx/${result.events[0].txHash}`)
+    }
+  }, [router, searchQuery.data, submittedQuery])
+
+  const isChainNotConfigured =
+    blocksQuery.error?.code === 'CHAIN_NOT_CONFIGURED' ||
+    networkQuery.error?.code === 'CHAIN_NOT_CONFIGURED' ||
+    validatorsQuery.error?.code === 'CHAIN_NOT_CONFIGURED' ||
+    searchQuery.error?.code === 'CHAIN_NOT_CONFIGURED'
+
+  function handleSearchSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    executeSearch(query)
   }
 
   const blocks = blocksQuery.data?.items ?? []

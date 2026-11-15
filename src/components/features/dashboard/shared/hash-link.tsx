@@ -13,10 +13,12 @@ export function HashLink({
 }: {
   hash: string | null
   short: string
-  kind?: 'tx' | 'address'
+  kind?: 'tx' | 'address' | 'search'
 }) {
   const [copied, setCopied] = useState(false)
   if (!hash) return <span>-</span>
+  const href =
+    kind === 'search' ? `/explorer?q=${encodeURIComponent(hash)}` : `/explorer/${kind}/${hash}`
   async function copy() {
     try {
       await navigator.clipboard.writeText(hash ?? '')
@@ -35,7 +37,7 @@ export function HashLink({
       <span aria-live="polite" className="sr-only">
         {copied ? 'Tersalin' : ''}
       </span>
-      <Link href={`/explorer/${kind}/${hash}`} aria-label="Buka di explorer">
+      <Link href={href} aria-label="Buka di explorer">
         <ExternalLink size={14} />
       </Link>
     </span>

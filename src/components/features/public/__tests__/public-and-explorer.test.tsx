@@ -5,6 +5,7 @@ import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CekBansos } from '@/components/features/cek-bansos/cek-bansos'
+import { HashLink } from '@/components/features/dashboard/shared/hash-link'
 import { BlockExplorer } from '@/components/features/explorer/block-explorer'
 import { ContractDetails } from '@/components/features/explorer/contract-details'
 import { TransactionDetails } from '@/components/features/explorer/transaction-details'
@@ -14,6 +15,7 @@ import { toPublicProgramViewModel } from '@/lib/api/adapters/public'
 
 const pushMock = vi.fn()
 const replaceMock = vi.fn()
+let currentSearchParams = ''
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -22,7 +24,7 @@ vi.mock('next/navigation', () => ({
     refresh: vi.fn(),
   }),
   usePathname: () => '/explorer',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(currentSearchParams),
 }))
 
 const VALID_NIK = '7311011508900001'
@@ -78,6 +80,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   requestedUrls.length = 0
+  currentSearchParams = ''
   pushMock.mockReset()
   replaceMock.mockReset()
   window.localStorage.clear()
@@ -702,5 +705,61 @@ describe('FRONTEND INTEGRATION D — Public Cek Status & Explorer', () => {
     render(<VerificationGuide />)
     const backFromGuide = screen.getByRole('link', { name: /Kembali ke ringkasan publik/i })
     expect(backFromGuide).toHaveAttribute('href', '/transparansi')
+  })
+
+  it('HashLink kind="search" links to /explorer?q=... and BlockExplorer auto-triggers search from ?q=', async () => {
+    const { unmount } = render(
+      <div>
+        <HashLink hash={SAMPLE_COMMITMENT} short="0xcdcd…cdcd" kind="search" />
+        <HashLink hash={SAMPLE_TX_HASH} short="0xabab…abab" />
+      </div>,
+    )
+    const links = screen.getAllByRole('link', { name: /Buka di explorer/i })
+    expect(links[0]).toHaveAttribute('href', `/explorer?q=${encodeURIComponent(SAMPLE_COMMITMENT)}`)
+    expect(links[1]).toHaveAttribute('href', `/explorer/tx/${SAMPLE_TX_HASH}`)
+    unmount()
+
+    let searchedQ: string | null = null
+    server.use(
+      http.get('*/api/v1/explorer/search', ({ request }) => {
+        searchedQ = new URL(request.url).searchParams.get('q')
+        return HttpResponse.json({
+          data: [
+            {
+              txHash: SAMPLE_TX_HASH,
+              refId: SAMPLE_REF_ID,
+              programId: SAMPLE_PROGRAM_ID,
+              period: 202610,
+              amount: '600000',
+              commitment: SAMPLE_COMMITMENT,
+              cid: 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+              gatewayUrl:
+                'https://gateway.pinata.cloud/ipfs/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+              recordedBy: SAMPLE_ADDRESS,
+              utc: '2026-11-04T03:13:20.000Z',
+              wita: '4 November 2026 11.13.20 WITA',
+            },
+          ],
+          limit: 100,
+        })
+      }),
+    )
+
+    currentSearchParams = `q=${encodeURIComponent(SAMPLE_COMMITMENT)}`
+    const queryClient = createTestQueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BlockExplorer />
+      </QueryClientProvider>,
+    )
+
+    const searchInput = screen.getByLabelText(/Cari TxHash, nomor blok, alamat, refId, atau commitment/i)
+    await waitFor(() => {
+      expect(searchInput).toHaveValue(SAMPLE_COMMITMENT)
+      expect(searchedQ).toBe(SAMPLE_COMMITMENT)
+    })
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith(`/explorer/tx/${SAMPLE_TX_HASH}`)
+    })
   })
 })
