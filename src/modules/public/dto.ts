@@ -78,6 +78,7 @@ export function toPublicStatusCheckDto(data: any): PublicStatusCheckDto {
             name: entry.program?.name != null ? String(entry.program.name) : undefined,
           },
           period: Number(entry.period ?? 0),
+          amount: Math.max(0, Math.round(Number(entry.amount ?? 0))),
           status: String(entry.status ?? ''),
           txHash: entry.txHash ? String(entry.txHash) : undefined,
         }))

@@ -466,6 +466,7 @@ describe('API DTO -> ViewModel adapters (all domains)', () => {
         {
           program: { code: 'BLT', name: 'BLT Kelurahan' },
           period: 202610,
+          amount: 600000,
           status: 'SUCCESS',
           txHash: '0x' + 'b'.repeat(64),
         },
@@ -474,6 +475,7 @@ describe('API DTO -> ViewModel adapters (all domains)', () => {
     expect(foundStatus.found).toBe(true)
     if (foundStatus.found) {
       expect(foundStatus.entries[0]?.statusLabel).toBe('Tersalurkan (Tercatat On-Chain)')
+      expect(foundStatus.entries[0]?.amountFormatted).toBe('Rp 600.000')
     }
 
     const blockDto = {

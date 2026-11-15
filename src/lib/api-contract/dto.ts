@@ -561,6 +561,7 @@ export const statusCheckEntryDtoSchema = z.object({
     name: z.string().nullable().optional(),
   }),
   period: z.number().int(),
+  amount: z.number().int().nonnegative(),
   status: z.string(),
   txHash: z.string().nullable().optional(),
 }).strict()

@@ -192,6 +192,8 @@ export function toPublicStatusCheckViewModel(
         programName: entry.program.name ?? entry.program.code ?? 'Program Bantuan',
         periodId: entry.period,
         periodLabel: formatPeriodId(entry.period),
+        amount: entry.amount,
+        amountFormatted: formatRupiah(entry.amount),
         status: entry.status,
         statusLabel: PUBLIC_STATUS_LABELS[entry.status] ?? entry.status,
         txHash,

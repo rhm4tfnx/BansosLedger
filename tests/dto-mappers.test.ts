@@ -617,12 +617,16 @@ describe('DTO Mappers - Security & Structure', () => {
         ...dirtyFields,
         program: { code: 'PKH-2026', name: 'Program PKH' },
         period: 202601,
+        amount: 300000,
         status: 'SUDAH_DISALURKAN',
         txHash: '0x' + 'a'.repeat(64),
       }],
     })
     assertNoForbiddenKeys(statusDto)
     expect(statusDto.found).toBe(true)
+    if (statusDto.found) {
+      expect(statusDto.entries[0]?.amount).toBe(300000)
+    }
 
     // Withdraw evidence
     const withdrawDto = toWithdrawEvidenceDto({

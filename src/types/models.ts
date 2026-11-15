@@ -472,6 +472,8 @@ export interface PublicStatusEntryViewModel {
   programName: string
   periodId: number
   periodLabel: string
+  amount: number
+  amountFormatted: string
   status: string
   statusLabel: string
   txHash: string | null

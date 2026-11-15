@@ -63,16 +63,17 @@ export async function statusCheck(request: Request) {
     await appendAudit({ actor: 'anonymous', action: 'PUBLIC_STATUS_CHECK', diff: { blindIndexPrefix: blind.slice(0, 12) } })
     if (!recipient) return json(toPublicStatusCheckDto({ found: false }))
     const enrollmentIds = await Enrollments.find({ recipientId: recipient._id }).distinct('programId')
-    const enrolledPrograms = await Programs.find({ _id: { $in: enrollmentIds }, status: { $in: ['ACTIVE', 'CLOSED'] } }).select('_id code name startPeriod endPeriod').limit(100).lean()
-    const paid = await Disbursements.find({ recipientId: recipient._id, status: 'SUCCESS', deletedAt: null }).select('programId periodId chain.txHash').limit(5000).lean()
-    const successes = new Map(paid.map(row => [`${row.programId}:${row.periodId}`, row.chain?.txHash]))
+    const enrolledPrograms = await Programs.find({ _id: { $in: enrollmentIds }, status: { $in: ['ACTIVE', 'CLOSED'] } }).select('_id code name amountPerRecipient startPeriod endPeriod').limit(100).lean()
+    const paid = await Disbursements.find({ recipientId: recipient._id, status: 'SUCCESS', deletedAt: null }).select('programId periodId amount chain.txHash').limit(5000).lean()
+    const successes = new Map(paid.map(row => [`${row.programId}:${row.periodId}`, { txHash: row.chain?.txHash, amount: row.amount }]))
     const wita = new Date(Date.now() + 8 * 3600000), currentPeriod = wita.getUTCFullYear() * 100 + wita.getUTCMonth() + 1
-    const entries: { program: { code?: string; name?: string | null }; period: number; status: string; txHash?: string | null }[] = []
+    const entries: { program: { code?: string; name?: string | null }; period: number; amount: number; status: string; txHash?: string | null }[] = []
     for (const program of enrolledPrograms) {
       for (let period = program.startPeriod ?? currentPeriod; period <= Math.min(program.endPeriod ?? currentPeriod, currentPeriod); period = period % 100 === 12 ? period + 89 : period + 1) {
         if (entries.length >= 5000) throw new DomainError(503, 'RESULT_TOO_LARGE', 'Hubungi petugas untuk riwayat lengkap.')
-        const key = `${program._id}:${period}`, txHash = successes.get(key)
-        entries.push({ program: { code: program.code, name: program.name }, period, status: successes.has(key) ? 'SUDAH_DISALURKAN' : 'BELUM_DISALURKAN', ...(txHash ? { txHash } : {}) })
+        const key = `${program._id}:${period}`, success = successes.get(key), txHash = success?.txHash
+        const amount = success?.amount ?? program.amountPerRecipient ?? 0
+        entries.push({ program: { code: program.code, name: program.name }, period, amount, status: successes.has(key) ? 'SUDAH_DISALURKAN' : 'BELUM_DISALURKAN', ...(txHash ? { txHash } : {}) })
       }
     }
     return json(toPublicStatusCheckDto({ found: true, name: recipient.name, entries }))

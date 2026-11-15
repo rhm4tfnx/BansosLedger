@@ -4,7 +4,7 @@ import { createContext, useContext, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
-import { LayoutDashboard, Users, Layers, ArrowLeftRight, ShieldX, Download, ShieldCheck, Clock3, ExternalLink, ArrowUpRight, AlignLeft, Search, Bell, ChevronDown, X } from 'lucide-react'
+import { LayoutDashboard, Users, Layers, ArrowLeftRight, ShieldX, Download, ShieldCheck, Clock3, ExternalLink, ArrowUpRight, AlignLeft, Search, ChevronDown, X } from 'lucide-react'
 import styles from './overview/dashboard.module.css'
 
 import { ForceChangePasswordDialog } from '@/components/features/auth/force-change-password-dialog'
@@ -79,7 +79,6 @@ function DashboardFrame({
   const summaryQuery = useDashboardSummaryQuery()
   const networkQuery = useNetworkStatusQuery()
   const failedCount = summaryQuery.data ? String(summaryQuery.data.failed) : '-'
-  const pendingCount = summaryQuery.data ? String(summaryQuery.data.pending) : '-'
   const latestBlock = networkQuery.data ? `#${networkQuery.data.latestBlock.toLocaleString('id-ID')}` : '-'
   const validatorCount = networkQuery.data?.validatorCount ?? null
   const validatorLabel = validatorCount === null ? '-' : String(validatorCount)
@@ -133,7 +132,6 @@ function DashboardFrame({
               <span className={styles.headerNetwork}><span className={styles.statusDot} />Besu · {validatorLabel} validator</span>
               <span className="text-xs">{can('wallet:verify-session') ? (effectiveWalletVerified ? 'Wallet terverifikasi' : 'Wallet belum terverifikasi') : 'Wallet tidak diperlukan'}</span>
               <button disabled={loggingOut} onClick={logout} className="flex shrink-0 items-center gap-1 text-sm" aria-label="Keluar"><LogOut size={17} />{loggingOut ? 'Keluar…' : 'Keluar'}</button>
-              <button className={styles.iconButton} aria-label="Notifikasi" onClick={() => setNotice(summaryQuery.data ? `Ringkasan: ${pendingCount} transaksi menunggu, ${failedCount} transaksi gagal.` : 'Ringkasan notifikasi belum tersedia.')}><Bell size={19} /><i /></button>
               {previewEnabled && <label className="text-xs">Simulasi UI (non-production)<select id="role-preview" aria-label="Simulasi Pratinjau UI Role" className="block max-w-48 rounded border bg-white p-1 text-black" value={role ?? ''} onChange={event => setPreviewRole?.(event.target.value as Role || null)}><option value="">Belum Login</option>{roles.map(value => <option key={value} value={value}>{ROLE_METADATA[value].shortLabel}</option>)}</select></label>}
               <div className={styles.profile}><span>{meta?.badgeCode ?? '—'}</span><div><strong>{meta?.shortLabel ?? 'Belum Login'}</strong><small>{meta?.instansi ?? 'Sesi belum terverifikasi'}</small></div><ChevronDown size={15} /></div>
             </div>

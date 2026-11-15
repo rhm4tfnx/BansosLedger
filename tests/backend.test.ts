@@ -160,7 +160,7 @@ describe('public status privacy', () => {
     expect(Date.now() - start).toBeGreaterThanOrEqual(600); expect(response.status).toBe(200); expect(response.headers.get('cache-control')).toBe('no-store')
     const result = await response.json(), encoded = JSON.stringify(result)
     expect(result.found).toBe(mode === 'FINAL')
-    if (mode === 'FINAL') { expect(result.name).toBe('Synthetic Recipient'); expect(result.entries).toHaveLength(2) } else expect(result).toEqual({ found: false })
+    if (mode === 'FINAL') { expect(result.name).toBe('Synthetic Recipient'); expect(result.entries).toHaveLength(2); expect(result.entries[0].amount).toBe(300000) } else expect(result).toEqual({ found: false })
     for (const value of [nik, '"nik"', '"address"', '"phone"', 'Private location', '0800000000']) expect(encoded).not.toContain(value)
     const logs = await AuditLogs.find().lean(); expect(JSON.stringify(logs)).not.toContain(nik); expect(JSON.stringify(logs)).not.toContain('Synthetic Recipient')
     expect(logs[0].diff).toEqual({ blindIndexPrefix: nikBlindIndex(nik).slice(0, 12) })

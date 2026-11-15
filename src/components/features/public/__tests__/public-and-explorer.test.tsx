@@ -117,6 +117,7 @@ describe('FRONTEND INTEGRATION D — Public Cek Status & Explorer', () => {
             {
               program: { code: 'BLTK-2026', name: 'BLT-K Kelurahan' },
               period: 202610,
+              amount: 600000,
               status: 'SUDAH_DISALURKAN',
               txHash: SAMPLE_TX_HASH,
             },
@@ -147,6 +148,7 @@ describe('FRONTEND INTEGRATION D — Public Cek Status & Explorer', () => {
     expect(screen.getByText(VALID_NIK)).toBeInTheDocument()
     expect(screen.getByText('BLT-K Kelurahan')).toBeInTheDocument()
     expect(screen.getByText('Oktober 2026')).toBeInTheDocument()
+    expect(screen.getByText('Rp 600.000')).toBeInTheDocument()
     expect(screen.getByText('Sudah disalurkan')).toBeInTheDocument()
     expect(
       screen.getByText(

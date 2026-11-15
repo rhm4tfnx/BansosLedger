@@ -83,6 +83,8 @@ export function CekBansos() {
                 programName: '—',
                 periodId: 0,
                 periodLabel: '—',
+                amount: 0,
+                amountFormatted: '—',
                 status: 'BELUM_DISALURKAN',
                 statusLabel: 'Belum disalurkan',
                 txHash: null,
@@ -184,8 +186,8 @@ export function CekBansos() {
           </p>
         </form>
         <p className="mt-3 font-mono text-xs text-body-copy">
-          Hasil menampilkan NIK yang Anda ketik, nama lengkap, program, periode, status, dan
-          TxHash. Alamat dan nomor telepon tidak pernah ditampilkan.
+          Hasil menampilkan NIK yang Anda ketik, nama lengkap, program, periode, nominal, status,
+          dan TxHash. Alamat dan nomor telepon tidak pernah ditampilkan.
         </p>
 
         <div className="mt-4">
@@ -213,6 +215,7 @@ export function CekBansos() {
                   >
                     <Info label="Program bantuan" value={entry.programName} />
                     <Info label="Periode" value={entry.periodLabel} />
+                    <Info label="Nominal bantuan" value={entry.amountFormatted} mono />
                     <Info
                       label="Status penyaluran"
                       value={entry.statusLabel}
