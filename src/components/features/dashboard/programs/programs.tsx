@@ -488,22 +488,31 @@ function ProgramsContent() {
                       </td>
                       <td>
                         <div className={s.rowActions}>
-                          <button type="button" onClick={() => selectProgram(p.id, true)}>
+                          <button
+                            type="button"
+                            className={
+                              !can('program:update') || p.status === 'CLOSED'
+                                ? s.actionFull
+                                : undefined
+                            }
+                            onClick={() => selectProgram(p.id, true)}
+                          >
                             Detail
                           </button>
                           {can('program:update') && p.status === 'DRAFT' && (
                             <>
                               <button
                                 type="button"
-                                onClick={() => setChainAction({ kind: 'create', program: p })}
-                              >
-                                Aktivasi (createProgram)
-                              </button>
-                              <button
-                                type="button"
                                 onClick={() => setFormState({ mode: 'edit', program: p })}
                               >
                                 Edit
+                              </button>
+                              <button
+                                type="button"
+                                className={s.actionFull}
+                                onClick={() => setChainAction({ kind: 'create', program: p })}
+                              >
+                                Aktivasi (createProgram)
                               </button>
                             </>
                           )}
@@ -517,6 +526,7 @@ function ProgramsContent() {
                               </button>
                               <button
                                 type="button"
+                                className={s.actionFull}
                                 onClick={() => setChainAction({ kind: 'close', program: p })}
                               >
                                 Tutup program
@@ -527,12 +537,14 @@ function ProgramsContent() {
                             <>
                               <button
                                 type="button"
+                                className={s.actionFull}
                                 onClick={() => setEnrollDialogProgram(p)}
                               >
                                 Daftarkan penerima
                               </button>
                               <button
                                 type="button"
+                                className={s.actionFull}
                                 disabled={p.status !== 'ACTIVE'}
                                 title={
                                   p.status !== 'ACTIVE'
@@ -817,7 +829,7 @@ function EnrollRecipientsDialog({
             </EmptyState>
           ) : (
             <>
-              <div className={s.rowActions}>
+              <div className={s.actions}>
                 <button type="button" onClick={toggleAll}>
                   {selectedIds.length === candidates.length
                     ? 'Batalkan Semua Pilihan'

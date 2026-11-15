@@ -3,9 +3,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ArrowLeft, CheckCircle2, Copy, Wallet } from 'lucide-react'
+import { SmartBackLink } from '@/components/shared/smart-back-link'
 import { useClipboard } from '@/hooks/use-clipboard'
 import { formatApiError } from '@/lib/api/errors'
 import { useExplorerAddressQuery, useExplorerValidatorsQuery } from '@/lib/api/hooks/explorer'
+import { ensureWitaSuffix } from '@/lib/format'
 
 const panel = 'rounded-control border bg-white p-5 sm:p-6'
 
@@ -36,10 +38,10 @@ export function AddressDetails({ address }: AddressDetailsProps) {
   return (
     <>
       <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8 sm:py-5">
           <Link href="/explorer" className="flex items-center gap-3 font-bold">
             <span
-              className="relative block w-36 shrink-0 overflow-hidden mix-blend-multiply min-[1025px]:w-40"
+              className="relative block w-28 shrink-0 overflow-hidden mix-blend-multiply min-[400px]:w-32 sm:w-36 min-[1025px]:w-40"
               style={{ aspectRatio: '1590 / 325' }}
             >
               <img
@@ -53,20 +55,20 @@ export function AddressDetails({ address }: AddressDetailsProps) {
               />
             </span>
           </Link>
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Link
               href="/transparansi"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border bg-white px-3.5 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border bg-white px-2.5 py-1.5 font-mono text-[11px] font-medium text-primary transition-colors hover:bg-secondary sm:px-3.5 sm:py-2 sm:text-xs"
             >
               Ringkasan publik
             </Link>
-            <Link
-              href="/explorer"
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border bg-white px-3.5 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
+            <SmartBackLink
+              fallbackHref="/explorer"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border bg-white px-2.5 py-1.5 font-mono text-[11px] font-medium text-primary transition-colors hover:bg-secondary sm:px-3.5 sm:py-2 sm:text-xs"
             >
               <ArrowLeft size={14} aria-hidden="true" />
               Explorer
-            </Link>
+            </SmartBackLink>
           </div>
         </div>
       </header>
@@ -226,7 +228,7 @@ export function AddressDetails({ address }: AddressDetailsProps) {
                         <td className="px-5 py-4 font-mono">{ev.refId}</td>
                         <td className="px-5 py-4">{ev.periodLabel}</td>
                         <td className="px-5 py-4 font-mono">{ev.amountFormatted}</td>
-                        <td className="px-5 py-4 font-mono">{ev.wita ?? '—'}</td>
+                        <td className="px-5 py-4 font-mono">{ensureWitaSuffix(ev.wita)}</td>
                         <td className="px-5 py-4">
                           <span className="inline-flex items-center gap-1 rounded-label bg-secondary px-2 py-1 text-primary">
                             <CheckCircle2 size={12} aria-hidden="true" />

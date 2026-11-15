@@ -1,9 +1,19 @@
-import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { SiteHeader } from '@/components/features/navigation/site-header'
+import { SmartBackLink } from '@/components/shared/smart-back-link'
 
-export function PublicShell({ title, children }: { title: string; children: ReactNode }) {
+export function PublicShell({
+  title,
+  children,
+  backHref = '/transparansi',
+  backLabel = 'Kembali ke ringkasan publik',
+}: {
+  title: string
+  children: ReactNode
+  backHref?: string
+  backLabel?: string
+}) {
   return (
     <>
       <a href="#main" className="sr-only focus:not-sr-only">
@@ -16,13 +26,13 @@ export function PublicShell({ title, children }: { title: string; children: Reac
         className="mx-auto flex max-w-7xl flex-col gap-12 px-5 py-10 sm:px-8 sm:py-12"
       >
         <header>
-          <Link
-            href="/transparansi"
+          <SmartBackLink
+            fallbackHref={backHref}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
           >
             <ArrowLeft size={14} aria-hidden="true" />
-            Kembali ke ringkasan publik
-          </Link>
+            {backLabel}
+          </SmartBackLink>
           <h1 className="mt-5 max-w-3xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
             {title}
           </h1>

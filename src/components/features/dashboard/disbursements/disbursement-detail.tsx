@@ -87,20 +87,18 @@ export function DisbursementDetail({ id, onBack }: { id: string; onBack?: () => 
   return (
     <div className={s.page}>
       <div className={s.dark}>
-        <div className={s.grid}>
+        <div className={s.detailBanner}>
           <div>
             <small>BESU QBFT EXPLORER</small>
             <h2>Detail Penyaluran &amp; Catatan On-Chain</h2>
             <p>Pelacakan catatan penyaluran dan transaksi on-chain.</p>
             <code>{txHash ? `/explorer/tx/${txHash}` : 'Transaksi belum memiliki hash on-chain'}</code>
           </div>
-          <div>
-            {onBack && (
-              <button type="button" onClick={onBack} style={{ marginTop: 12 }}>
-                Kembali ke tabel penyaluran
-              </button>
-            )}
-          </div>
+          {onBack && (
+            <button type="button" className={s.backBtn} onClick={onBack}>
+              Kembali ke tabel penyaluran
+            </button>
+          )}
         </div>
       </div>
       <div className={`${s.card} ${s[row.status] ?? ''}`}>
@@ -199,42 +197,46 @@ export function DisbursementDetail({ id, onBack }: { id: string; onBack?: () => 
           {row.evidence.length === 0 ? (
             <p className={s.empty}>Belum ada bukti.</p>
           ) : (
-            row.evidence.map((item) => {
-              const url = item.isWithdrawn
-                ? null
-                : (gatewayByCid.get(item.cid) ?? buildFallbackGatewayUrl(item.cid))
-              return (
-                <div className={s.receipt} key={item.cid}>
-                  <span className={s.badge}>{item.isWithdrawn ? 'DITARIK' : 'TERSEDIA'}</span>
-                  <p>{item.name}</p>
-                  <code title={item.cid}>{item.cidShort}</code>
-                  <small>
-                    {item.mime} · {item.size} byte
-                  </small>
-                  {item.isWithdrawn ? (
-                    <small>
-                      Bukti ditarik dari tampilan aplikasi
-                      {item.withdrawReason ? `: ${item.withdrawReason}` : ''}.
-                    </small>
-                  ) : (
-                    <div className={s.actions}>
-                      {url ? (
-                        <a href={url} target="_blank" rel="noreferrer">
-                          Buka {item.name}
-                        </a>
-                      ) : (
-                        <small>Tautan publik tidak tersedia.</small>
-                      )}
-                      {can('evidence:upload') && row.status === 'SUCCESS' && (
-                        <button type="button" onClick={() => setWithdrawTarget(item)}>
-                          Tarik bukti
-                        </button>
-                      )}
+            <div className={s.receiptList}>
+              {row.evidence.map((item) => {
+                const url = item.isWithdrawn
+                  ? null
+                  : (gatewayByCid.get(item.cid) ?? buildFallbackGatewayUrl(item.cid))
+                return (
+                  <div className={s.receipt} key={item.cid}>
+                    <div className={s.receiptHeader}>
+                      <p>{item.name}</p>
+                      <span className={s.badge}>{item.isWithdrawn ? 'DITARIK' : 'TERSEDIA'}</span>
                     </div>
-                  )}
-                </div>
-              )
-            })
+                    <code title={item.cid}>{item.cidShort}</code>
+                    <small>
+                      {item.mime} · {item.size} byte
+                    </small>
+                    {item.isWithdrawn ? (
+                      <small>
+                        Bukti ditarik dari tampilan aplikasi
+                        {item.withdrawReason ? `: ${item.withdrawReason}` : ''}.
+                      </small>
+                    ) : (
+                      <div className={s.actions}>
+                        {url ? (
+                          <a href={url} target="_blank" rel="noreferrer">
+                            Buka {item.name}
+                          </a>
+                        ) : (
+                          <small>Tautan publik tidak tersedia.</small>
+                        )}
+                        {can('evidence:upload') && row.status === 'SUCCESS' && (
+                          <button type="button" onClick={() => setWithdrawTarget(item)}>
+                            Tarik bukti
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -306,7 +308,7 @@ function DeleteDraftFromDetailDialog({
         if (!isPending) onClose()
       }}
     >
-      <form className={s.page} onSubmit={(e) => void onSubmit(e)} noValidate>
+      <form className={s.dialogForm} onSubmit={(e) => void onSubmit(e)} noValidate>
         <p>
           Hapus draf penyaluran <strong>{refIdShort}</strong>?
         </p>
@@ -327,7 +329,7 @@ function DeleteDraftFromDetailDialog({
             {formattedError.requestId && <small>ID Permintaan: {formattedError.requestId}</small>}
           </div>
         )}
-        <div className={s.actions}>
+        <div className={s.dialogFooter}>
           <button type="button" disabled={isPending} onClick={onClose}>
             Batal
           </button>
@@ -378,7 +380,7 @@ function WithdrawEvidenceDialog({
         if (!isPending) onClose()
       }}
     >
-      <form className={s.page} onSubmit={(e) => void onSubmit(e)} noValidate>
+      <form className={s.dialogForm} onSubmit={(e) => void onSubmit(e)} noValidate>
         <p>
           Berkas: <strong>{evidence.name}</strong> (<code>{evidence.cidShort}</code>)
         </p>
@@ -400,7 +402,7 @@ function WithdrawEvidenceDialog({
             {formattedError.requestId && <small>ID Permintaan: {formattedError.requestId}</small>}
           </div>
         )}
-        <div className={s.actions}>
+        <div className={s.dialogFooter}>
           <button type="button" disabled={isPending} onClick={onClose}>
             Batal
           </button>

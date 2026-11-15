@@ -41,7 +41,8 @@ const deleteReasonSchema = z.object({
 })
 
 function parseStatus(value: string): DisbursementStatus | undefined {
-  return STATUSES.find((status) => status === value)
+  const normalized = value.trim().toUpperCase()
+  return STATUSES.find((status) => status === normalized)
 }
 
 /** `YYYYMM` URL value to `YYYY-MM` month input value. */
@@ -223,25 +224,27 @@ function DisbursementsContent() {
                             )}
                           </td>
                           <td>
-                            <button type="button" onClick={() => set({ id: t.id }, false)}>
-                              <Search size={12} /> Detail &amp; verifikasi
-                            </button>
-                            {can('transaction:sign') && t.status !== 'SUCCESS' && (
-                              <div className={s.actions}>
-                                <button
-                                  type="button"
-                                  className={s.primary}
-                                  onClick={() => setWizardState({ open: true, initial: t })}
-                                >
-                                  {t.status === 'DRAFT' ? 'Konfirmasi' : 'Kirim ulang'}
-                                </button>
-                                {t.status === 'DRAFT' && t.activeEvidenceCount === 0 && (
-                                  <button type="button" onClick={() => setDeleteTarget(t)}>
-                                    Hapus draf
+                            <div className={s.rowActions}>
+                              <button type="button" onClick={() => set({ id: t.id }, false)}>
+                                <Search size={12} /> Detail &amp; verifikasi
+                              </button>
+                              {can('transaction:sign') && t.status !== 'SUCCESS' && (
+                                <div className={s.actions}>
+                                  <button
+                                    type="button"
+                                    className={s.primary}
+                                    onClick={() => setWizardState({ open: true, initial: t })}
+                                  >
+                                    {t.status === 'DRAFT' ? 'Konfirmasi' : 'Kirim ulang'}
                                   </button>
-                                )}
-                              </div>
-                            )}
+                                  {t.status === 'DRAFT' && t.activeEvidenceCount === 0 && (
+                                    <button type="button" onClick={() => setDeleteTarget(t)}>
+                                      Hapus draf
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )
@@ -312,7 +315,7 @@ export function DeleteDisbursementDialog({
         if (!isPending) onClose()
       }}
     >
-      <form className={s.page} onSubmit={(e) => void onSubmit(e)} noValidate>
+      <form className={s.dialogForm} onSubmit={(e) => void onSubmit(e)} noValidate>
         <p>
           Anda akan menghapus draf penyaluran <strong>{disbursement.refIdShort}</strong> untuk{' '}
           <strong>{disbursement.recipientName}</strong>.
@@ -335,7 +338,7 @@ export function DeleteDisbursementDialog({
             {formattedError.requestId && <small>ID Permintaan: {formattedError.requestId}</small>}
           </div>
         )}
-        <div className={s.actions}>
+        <div className={s.dialogFooter}>
           <button type="button" disabled={isPending} onClick={onClose}>
             Batal
           </button>

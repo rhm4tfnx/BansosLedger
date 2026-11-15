@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { SmartBackLink } from '@/components/shared/smart-back-link'
 import { usePublicProgramDetailQuery, usePublicProgramsQuery } from '@/lib/api/hooks/public'
+import { ensureWitaSuffix } from '@/lib/format'
 import type {
   PaginatedResult,
   PublicProgramDetailViewModel,
@@ -186,13 +188,13 @@ export function PublicProgramDetail({
   return (
     <PublicShell title={p?.name ?? code}>
       <section className={publicPanel}>
-        <Link
-          href="/program"
+        <SmartBackLink
+          fallbackHref="/program"
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
         >
           <ArrowLeft size={14} aria-hidden="true" />
           Semua program
-        </Link>
+        </SmartBackLink>
         {p && (
           <>
             {p.description && (
@@ -250,7 +252,7 @@ export function PublicProgramDetail({
                   </td>
                   <td className="border-b p-4">{t.periodLabel}</td>
                   <td className="border-b p-4 font-mono text-xs">{t.amountFormatted}</td>
-                  <td className="border-b p-4 font-mono text-xs">{t.timeWita} WITA</td>
+                  <td className="border-b p-4 font-mono text-xs">{ensureWitaSuffix(t.timeWita)}</td>
                 </tr>
               ))}
             </tbody>

@@ -50,6 +50,13 @@ export function formatWitaDateTime(value: string | number | Date | null | undefi
   return `${formatted} WITA`
 }
 
+export function ensureWitaSuffix(value: string | null | undefined): string {
+  if (!value) return '—'
+  const trimmed = value.trim()
+  if (!trimmed || trimmed === '—' || trimmed === '-') return '—'
+  return /\bWITA$/i.test(trimmed) ? trimmed : `${trimmed} WITA`
+}
+
 export function formatWitaDate(value: string | number | Date | null | undefined): string {
   if (value === null || value === undefined || value === '') return '—'
   const date = value instanceof Date ? value : new Date(value)

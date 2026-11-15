@@ -23,7 +23,7 @@ const faq = [
 
 export function VerificationGuide() {
   return (
-    <PublicShell title="Cara memeriksa transaksi">
+    <PublicShell title="Cara memeriksa transaksi" backHref="/cek-bansos">
       <section className={publicPanel}>
         <ol className="flex flex-col gap-6">
           {[

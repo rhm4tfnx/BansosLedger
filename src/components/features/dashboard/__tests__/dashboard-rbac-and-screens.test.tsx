@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DashboardShell } from '@/components/features/dashboard/dashboard-shell'
 import { Disbursements } from '@/components/features/dashboard/disbursements/disbursements'
 import { NetworkMonitoring } from '@/components/features/dashboard/monitoring/network-monitoring'
 import { Recipients } from '@/components/features/dashboard/recipients/recipients'
@@ -418,5 +419,69 @@ describe('Role-based action visibility & Part B read-only screens', () => {
     const pwdBtn = screen.getByRole('button', { name: /ganti kata sandi/i })
     expect(pwdBtn).not.toBeDisabled()
     settingsView.unmount()
+  })
+
+  it('DashboardShell links wallet verification badge to /dashboard/wallet, links Transaksi gagal to ?status=FAILED, and Disbursements activates FAILED tab from URL', async () => {
+    let requestedDisbursementStatus: string | null = null
+
+    server.use(
+      http.get('*/api/v1/auth/me', () =>
+        HttpResponse.json({
+          id: 'u-1',
+          name: 'Rahmat Operator',
+          institution: 'Kelurahan Takkalasi',
+          email: 'rahmat@barrukab.go.id',
+          role: 'OPERATOR',
+          mustChangePassword: false,
+          walletVerified: false,
+          boundWalletAddress: null,
+          expiresAt: 1790000000000,
+        }),
+      ),
+      http.get('*/api/v1/network/status', () =>
+        HttpResponse.json({
+          status: 'Normal',
+          latestBlock: 120,
+          timestamp: 1762240000,
+          ageSeconds: 2,
+          validatorCount: 4,
+          validators: [],
+        }),
+      ),
+      http.get('*/api/v1/programs', () =>
+        HttpResponse.json({ data: [], total: 0, page: 1, limit: 100, totalPages: 1 }),
+      ),
+      http.get('*/api/v1/disbursements', ({ request }) => {
+        requestedDisbursementStatus = new URL(request.url).searchParams.get('status')
+        return HttpResponse.json({
+          data: [],
+          total: 0,
+          page: 1,
+          limit: 20,
+          totalPages: 1,
+        })
+      }),
+    )
+
+    setMockLocation('/dashboard/penyaluran', 'status=FAILED')
+    renderForRole(
+      <DashboardShell initialRole="OPERATOR_KELURAHAN" walletVerified={false}>
+        <Disbursements />
+      </DashboardShell>,
+      'OPERATOR_KELURAHAN',
+      true,
+    )
+
+    const walletLink = await screen.findByRole('link', { name: /Wallet belum terverifikasi/i })
+    expect(walletLink).toHaveAttribute('href', '/dashboard/wallet')
+
+    const failedNavLink = screen.getByRole('link', { name: /Transaksi gagal/i })
+    expect(failedNavLink).toHaveAttribute('href', '/dashboard/penyaluran?status=FAILED')
+
+    const failedFilterBtn = await screen.findByRole('button', { name: /^FAILED$/i })
+    expect(failedFilterBtn).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => {
+      expect(requestedDisbursementStatus).toBe('FAILED')
+    })
   })
 })

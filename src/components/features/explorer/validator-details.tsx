@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { AlertTriangle, ArrowLeft, ShieldCheck } from 'lucide-react'
+import { SmartBackLink } from '@/components/shared/smart-back-link'
 import { formatApiError } from '@/lib/api/errors'
 import { useExplorerValidatorsQuery } from '@/lib/api/hooks/explorer'
 
@@ -19,21 +20,21 @@ export function ValidatorDetails() {
     >
       <nav
         aria-label="Navigasi explorer"
-        className="flex flex-wrap items-center gap-2.5 sm:gap-3"
+        className="flex flex-wrap items-center gap-2 sm:gap-3"
       >
-        <Link
-          href="/transparansi"
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
+        <SmartBackLink
+          fallbackHref="/transparansi"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border bg-white px-3 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary sm:px-4 sm:py-2.5"
         >
           <ArrowLeft size={14} aria-hidden="true" />
           Kembali ke ringkasan publik
-        </Link>
-        <Link
-          href="/explorer"
-          className="inline-flex min-h-11 items-center justify-center rounded-control border bg-white px-4 py-2.5 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
+        </SmartBackLink>
+        <SmartBackLink
+          fallbackHref="/explorer"
+          className="inline-flex min-h-11 items-center justify-center rounded-control border bg-white px-3 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary sm:px-4 sm:py-2.5"
         >
           Explorer
-        </Link>
+        </SmartBackLink>
       </nav>
       <h1 className="text-3xl font-bold tracking-tight">Validator jaringan</h1>
       <p className="text-xs text-muted-foreground">

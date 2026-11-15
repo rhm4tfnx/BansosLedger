@@ -15,12 +15,14 @@ import { toPublicProgramViewModel } from '@/lib/api/adapters/public'
 
 const pushMock = vi.fn()
 const replaceMock = vi.fn()
+const backMock = vi.fn()
 let currentSearchParams = ''
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: pushMock,
     replace: replaceMock,
+    back: backMock,
     refresh: vi.fn(),
   }),
   usePathname: () => '/explorer',
@@ -83,6 +85,7 @@ beforeEach(() => {
   currentSearchParams = ''
   pushMock.mockReset()
   replaceMock.mockReset()
+  backMock.mockReset()
   window.localStorage.clear()
   window.sessionStorage.clear()
 })
@@ -706,7 +709,62 @@ describe('FRONTEND INTEGRATION D — Public Cek Status & Explorer', () => {
 
     render(<VerificationGuide />)
     const backFromGuide = screen.getByRole('link', { name: /Kembali ke ringkasan publik/i })
-    expect(backFromGuide).toHaveAttribute('href', '/transparansi')
+    expect(backFromGuide).toHaveAttribute('href', '/cek-bansos')
+
+    // SmartBackLink uses router.back() when same-origin referrer + history.length > 1
+    Object.defineProperty(window.history, 'length', { configurable: true, value: 3 })
+    Object.defineProperty(document, 'referrer', {
+      configurable: true,
+      value: `${window.location.origin}/transparansi`,
+    })
+    const user = userEvent.setup()
+    await user.click(backFromGuide)
+    expect(backMock).toHaveBeenCalledTimes(1)
+
+    // Reset referrer & history length
+    Object.defineProperty(window.history, 'length', { configurable: true, value: 1 })
+    Object.defineProperty(document, 'referrer', { configurable: true, value: '' })
+  })
+
+  it('CekBansos auto-scrolls to result section after status check completes and Explorer avoids duplicate WITA WITA', async () => {
+    const scrollIntoViewMock = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoViewMock
+
+    server.use(
+      http.post('*/api/v1/public/status-check', () =>
+        HttpResponse.json({
+          found: false,
+        }),
+      ),
+    )
+
+    const queryClient = createTestQueryClient()
+    const user = userEvent.setup()
+    const { unmount } = render(
+      <QueryClientProvider client={queryClient}>
+        <CekBansos />
+      </QueryClientProvider>,
+    )
+    const nikInput = screen.getByLabelText(/Nomor Induk Kependudukan \(NIK\)/i)
+    await user.type(nikInput, VALID_NIK)
+    await user.click(screen.getByRole('checkbox', { name: /Saya bukan robot/i }))
+    await user.click(screen.getByRole('button', { name: /Cek Status/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Data tidak ditemukan.')
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
+    })
+    unmount()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BlockExplorer />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => {
+      expect(screen.getAllByText('#120').length).toBeGreaterThan(0)
+    })
+    expect(document.body.textContent ?? '').not.toMatch(/WITA\s+WITA/i)
   })
 
   it('HashLink kind="search" links to /explorer?q=... and BlockExplorer auto-triggers search from ?q=', async () => {

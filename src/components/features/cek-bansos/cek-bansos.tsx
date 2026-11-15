@@ -23,8 +23,20 @@ export function CekBansos() {
     null,
   )
   const submitting = useRef(false)
+  const resultSectionRef = useRef<HTMLElement | null>(null)
   const statusCheckMutation = usePublicStatusCheckMutation()
   const loading = statusCheckMutation.isPending
+
+  function scrollToResultSection() {
+    const run = () => {
+      resultSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    }
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(run)
+    } else {
+      setTimeout(run, 0)
+    }
+  }
 
   function handleNikChange(value: string) {
     const normalizedNik = value.replace(/\D/g, '').slice(0, 16)
@@ -108,6 +120,7 @@ export function CekBansos() {
       setErrorRequestId(formatted.requestId)
     } finally {
       submitting.current = false
+      scrollToResultSection()
     }
   }
 
@@ -199,7 +212,11 @@ export function CekBansos() {
           </Link>
         </div>
 
-        <section aria-labelledby="hasil-verifikasi" className="mt-8">
+        <section
+          ref={resultSectionRef}
+          aria-labelledby="hasil-verifikasi"
+          className="mt-8 scroll-mt-24"
+        >
           <h2 id="hasil-verifikasi" className="mb-5 font-sans text-2xl font-medium tracking-tight">
             hasil-verifikasi/
           </h2>

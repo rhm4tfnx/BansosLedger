@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, ArrowLeft, ArrowUpRight, Box, Network, Search, ShieldCheck } from 'lucide-react'
+import { SmartBackLink } from '@/components/shared/smart-back-link'
 import { formatApiError } from '@/lib/api/errors'
 import { useNetworkStatusQuery } from '@/lib/api/hooks/chain'
 import {
@@ -11,6 +12,7 @@ import {
   useExplorerSearchQuery,
   useExplorerValidatorsQuery,
 } from '@/lib/api/hooks/explorer'
+import { ensureWitaSuffix } from '@/lib/format'
 
 export function BlockExplorer() {
   const router = useRouter()
@@ -99,10 +101,10 @@ export function BlockExplorer() {
   return (
     <>
       <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8 sm:py-5">
           <Link href="/" className="flex items-center gap-3 font-bold">
             <span
-              className="relative block w-36 shrink-0 overflow-hidden mix-blend-multiply min-[1025px]:w-40"
+              className="relative block w-28 shrink-0 overflow-hidden mix-blend-multiply min-[400px]:w-32 sm:w-36 min-[1025px]:w-40"
               style={{ aspectRatio: '1590 / 325' }}
             >
               <img
@@ -119,20 +121,20 @@ export function BlockExplorer() {
               BLOCK EXPLORER
             </span>
           </Link>
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Link
               href="/transparansi"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border bg-white px-3.5 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border bg-white px-2.5 py-1.5 font-mono text-[11px] font-medium text-primary transition-colors hover:bg-secondary sm:px-3.5 sm:py-2 sm:text-xs"
             >
               Ringkasan publik
             </Link>
-            <Link
-              href="/"
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border bg-white px-3.5 py-2 font-mono text-xs font-medium text-primary transition-colors hover:bg-secondary"
+            <SmartBackLink
+              fallbackHref="/"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border bg-white px-2.5 py-1.5 font-mono text-[11px] font-medium text-primary transition-colors hover:bg-secondary sm:px-3.5 sm:py-2 sm:text-xs"
             >
               <ArrowLeft size={14} />
               Home
-            </Link>
+            </SmartBackLink>
           </div>
         </div>
       </header>
@@ -317,7 +319,8 @@ export function BlockExplorer() {
                             {ev.txHashShort ?? ev.refId}
                           </p>
                           <p className="mt-1 text-muted-foreground">
-                            Periode {ev.periodLabel} · {ev.amountFormatted} · {ev.wita} WITA
+                            Periode {ev.periodLabel} · {ev.amountFormatted} ·{' '}
+                            {ensureWitaSuffix(ev.wita)}
                           </p>
                         </div>
                         {ev.txHash && (
@@ -357,7 +360,7 @@ export function BlockExplorer() {
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {networkQuery.data?.timestampWita
-                  ? `Sinkron: ${networkQuery.data.timestampWita} WITA`
+                  ? `Sinkron: ${ensureWitaSuffix(networkQuery.data.timestampWita)}`
                   : 'Pembaruan otomatis tiap 10 detik'}
               </p>
             </div>
@@ -463,7 +466,7 @@ export function BlockExplorer() {
                         #{b.number}
                       </Link>
                       <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                        {b.timestampWita} WITA
+                        {ensureWitaSuffix(b.timestampWita)}
                       </p>
                     </div>
                     <div className="min-w-0 text-right">

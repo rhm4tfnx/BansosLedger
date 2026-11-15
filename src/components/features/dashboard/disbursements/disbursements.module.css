@@ -39,17 +39,25 @@
 }
 .page button,
 .page select,
-.page input {
+.page input,
+.page textarea {
   font: inherit;
 }
 .page button,
 .page select,
-.page input:not([type='checkbox']) {
+.page input:not([type='checkbox']),
+.page textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px 12px;
   background: white;
   color: var(--ink);
+}
+.page textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 84px;
+  line-height: 1.5;
 }
 .page button {
   cursor: pointer;
@@ -254,9 +262,18 @@
   background: #fcfcfd;
 }
 .table button {
-  padding: 6px 9px;
+  padding: 6px 10px;
   font-size: 10px;
-  margin-top: 6px;
+  white-space: nowrap;
+}
+.rowActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.rowActions > .actions {
+  gap: 6px;
 }
 .table td:first-child {
   min-width: 155px;
@@ -357,12 +374,140 @@
   line-height: 2;
   color: #a4bcfd;
 }
+.detailBanner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.backBtn {
+  flex-shrink: 0;
+  border-color: #344054 !important;
+  background: #1d2939 !important;
+  color: #f2f4f7 !important;
+}
+.backBtn:hover {
+  background: #344054 !important;
+}
+.receiptList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .receipt {
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 24px;
+  padding: 18px 20px;
   background: #fafafa;
-  line-height: 1.9;
+  line-height: 1.65;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.receiptHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.receiptHeader p {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+.dialogForm {
+  --brand: #465fff;
+  --ink: #1d2939;
+  --muted: #667085;
+  --line: #e4e7ec;
+  padding: 20px 30px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--ink);
+  font-family: var(--font-dashboard), sans-serif;
+  font-size: 13px;
+}
+.dialogForm p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.dialogForm code {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.dialogForm label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #344054;
+}
+.dialogForm textarea {
+  width: 100%;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  resize: vertical;
+  min-height: 92px;
+}
+.dialogForm textarea:focus-visible {
+  outline: 3px solid #a4bcfd;
+  outline-offset: 2px;
+}
+.dialogForm small[role='alert'] {
+  color: #b42318;
+  font-size: 11px;
+  font-weight: 400;
+}
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.dialogFooter button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: white;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.dialogFooter button:hover {
+  background: #f2f4f7;
+}
+.dialogFooter button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.dialogFooter .primary {
+  background: var(--brand);
+  color: white;
+  border-color: var(--brand);
+}
+.dialogFooter .primary:hover {
+  background: #3641f5;
+  color: white;
 }
 .drawer {
   max-width: 600px;

@@ -1,8 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, Suspense, useContext, useState, type ComponentType, type ReactNode } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { LayoutDashboard, Users, Layers, ArrowLeftRight, ShieldX, Download, ShieldCheck, Clock3, ExternalLink, ArrowUpRight, AlignLeft, Search, ChevronDown, X } from 'lucide-react'
 import styles from './overview/dashboard.module.css'
@@ -14,15 +14,22 @@ import { useDashboardSummaryQuery, useNetworkStatusQuery } from '@/lib/api/hooks
 import { roles, type Role, type Permission } from '@/types/rbac'
 import { ROLE_METADATA, dashboardRoutePermissions } from '@/lib/rbac'
 
-const navigation = [
+interface NavItem {
+  label: string
+  href: string
+  icon: ComponentType<{ size?: number }>
+  countKey?: 'failed'
+}
+
+const navigation: NavItem[] = [
   { label: 'Ringkasan', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Penerima Bantuan', href: '/dashboard/penerima', icon: Users },
   { label: 'Program bantuan', href: '/dashboard/bantuan', icon: Layers },
   { label: 'Penyaluran & IPFS', href: '/dashboard/penyaluran', icon: ArrowLeftRight },
-  { label: 'Transaksi gagal', href: '/dashboard#transaksi-terbaru', icon: ShieldX, countKey: 'failed' as const },
+  { label: 'Transaksi gagal', href: '/dashboard/penyaluran?status=FAILED', icon: ShieldX, countKey: 'failed' as const },
   { label: 'Laporan', href: '/dashboard/laporan', icon: Download },
 ]
-const monitoring = [
+const monitoring: NavItem[] = [
   { label: 'Status jaringan', href: '/dashboard/monitoring', icon: ShieldCheck },
   { label: 'Verifikasi integritas', href: '/dashboard/verifikasi', icon: ShieldCheck },
   { label: 'Log aktivitas', href: '/dashboard/log-aktivitas', icon: Clock3 },
@@ -30,6 +37,79 @@ const monitoring = [
   { label: 'Pengaturan akun', href: '/dashboard/pengaturan', icon: ShieldCheck },
   { label: 'Block explorer', href: '/explorer', icon: ExternalLink },
 ]
+
+function hrefPath(href: string): string {
+  return href.split('#')[0].split('?')[0]
+}
+
+function isNavItemActive(href: string, pathname: string, searchQuery = ''): boolean {
+  if (href.includes('#')) return false
+  const [itemPath, itemQuery] = href.split('?')
+  if (itemQuery) {
+    if (pathname !== itemPath) return false
+    const expected = new URLSearchParams(itemQuery)
+    const actual = new URLSearchParams(searchQuery)
+    for (const [k, v] of expected.entries()) {
+      if ((actual.get(k) ?? '').toUpperCase() !== v.toUpperCase()) return false
+    }
+    return true
+  }
+  if (itemPath === '/dashboard/penyaluran' && pathname === '/dashboard/penyaluran') {
+    const actual = new URLSearchParams(searchQuery)
+    if ((actual.get('status') ?? '').toUpperCase() === 'FAILED') return false
+  }
+  return pathname === itemPath || (itemPath !== '/dashboard' && pathname.startsWith(`${itemPath}/`))
+}
+
+function NavLinksList({
+  items,
+  pathname,
+  searchQuery,
+  failedCount,
+  onSelect,
+}: {
+  items: NavItem[]
+  pathname: string
+  searchQuery: string
+  failedCount: string
+  onSelect: () => void
+}) {
+  return (
+    <>
+      {items.map(item => {
+        const active = isNavItemActive(item.href, pathname, searchQuery)
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            title={item.label}
+            aria-label={item.label}
+            aria-current={active ? 'page' : undefined}
+            className={active ? styles.active : ''}
+            onClick={onSelect}
+          >
+            <item.icon size={19} />
+            <span>{item.label}</span>
+            {item.countKey && <small>{failedCount}</small>}
+          </Link>
+        )
+      })}
+    </>
+  )
+}
+
+function SearchAwareNavLinks(props: Omit<Parameters<typeof NavLinksList>[0], 'searchQuery'>) {
+  const searchParams = useSearchParams()
+  return <NavLinksList {...props} searchQuery={searchParams.toString()} />
+}
+
+function SidebarNav(props: Omit<Parameters<typeof NavLinksList>[0], 'searchQuery'>) {
+  return (
+    <Suspense fallback={<NavLinksList {...props} searchQuery="" />}>
+      <SearchAwareNavLinks {...props} />
+    </Suspense>
+  )
+}
 const SearchContext = createContext<{ query: string; setQuery: (value: string) => void } | null>(null)
 
 export function useDashboardSearch() {
@@ -94,7 +174,8 @@ function DashboardFrame({
     }
   }
 
-  const permissionFor = (href: string): Permission => href === '/explorer' ? 'explorer:read' : dashboardRoutePermissions[href.split('#')[0]]
+  const permissionFor = (href: string): Permission =>
+    href === '/explorer' ? 'explorer:read' : dashboardRoutePermissions[hrefPath(href)]
   const visibleNavigation = navigation.map(item => ({ ...item, permission: permissionFor(item.href) })).filter(item => can(item.permission))
   const visibleMonitoring = monitoring.map(item => ({ ...item, permission: permissionFor(item.href) })).filter(item => can(item.permission))
   const pathname = usePathname()
@@ -102,7 +183,7 @@ function DashboardFrame({
   const [collapsed, setCollapsed] = useState(false)
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState('')
-  const isActive = (href: string) => !href.includes('#') && (pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`)))
+  const isActive = (href: string) => isNavItemActive(href, pathname)
   const section = [...navigation, ...monitoring].find(item => isActive(item.href))?.label ?? 'Dashboard'
 
   return (
@@ -114,11 +195,21 @@ function DashboardFrame({
           <Link href="/" className={styles.brand}><span className={styles.logoCrop}><img src="/images/bansosledger-logo.png" alt="BansosLedger" width={2145} height={733} /></span></Link>
           <span className={styles.workspace}>WORKSPACE PENGELOLA</span>
           <nav aria-label="Navigasi dashboard">
-            {visibleNavigation.map(item => <Link key={item.href} href={item.href} title={item.label} aria-label={item.label} aria-current={isActive(item.href) ? 'page' : undefined} className={isActive(item.href) ? styles.active : ''} onClick={() => setSidebar(false)}><item.icon size={19} /><span>{item.label}</span>{item.countKey && <small>{failedCount}</small>}</Link>)}
+            <SidebarNav
+              items={visibleNavigation}
+              pathname={pathname}
+              failedCount={failedCount}
+              onSelect={() => setSidebar(false)}
+            />
           </nav>
           <div className={styles.navSection}>MONITORING</div>
           <nav aria-label="Monitoring dashboard">
-            {visibleMonitoring.map(item => <Link key={item.href} href={item.href} title={item.label} aria-label={item.label} aria-current={isActive(item.href) ? 'page' : undefined} className={isActive(item.href) ? styles.active : ''} onClick={() => setSidebar(false)}><item.icon size={19} /><span>{item.label}</span></Link>)}
+            <SidebarNav
+              items={visibleMonitoring}
+              pathname={pathname}
+              failedCount={failedCount}
+              onSelect={() => setSidebar(false)}
+            />
           </nav>
           <div className={styles.networkMini}><div><span className={styles.statusDot} />Jaringan Besu</div><p>Block height <strong>{latestBlock}</strong></p><p>Validator aktif<strong>{validatorLabel}</strong></p></div>
           <Link href="/" className={styles.homeLink}>Kembali ke halaman publik <ArrowUpRight size={15} /></Link>
@@ -130,7 +221,21 @@ function DashboardFrame({
             {pathname === '/dashboard' ? <label className={styles.search}><Search size={19} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari nama, hash, atau alasan revert..." aria-label="Cari transaksi" /><kbd>⌕</kbd></label> : <span className={styles.period}>Pengelolaan / {section === 'Program bantuan' ? 'Program Bantuan' : section}</span>}
             <div className={styles.headerRight}>
               <span className={styles.headerNetwork}><span className={styles.statusDot} />Besu · {validatorLabel} validator</span>
-              <span className="text-xs">{can('wallet:verify-session') ? (effectiveWalletVerified ? 'Wallet terverifikasi' : 'Wallet belum terverifikasi') : 'Wallet tidak diperlukan'}</span>
+              {can('wallet:verify-session') ? (
+                <Link
+                  href="/dashboard/wallet"
+                  className={`${styles.walletStatus} ${effectiveWalletVerified ? styles.walletVerified : styles.walletUnverified}`}
+                  title={
+                    effectiveWalletVerified
+                      ? 'Wallet sesi terverifikasi — klik untuk membuka Registri Wallet'
+                      : 'Wallet sesi belum terverifikasi — klik untuk mengikat wallet sesi'
+                  }
+                >
+                  {effectiveWalletVerified ? 'Wallet terverifikasi' : 'Wallet belum terverifikasi'}
+                </Link>
+              ) : (
+                <span className="text-xs">Wallet tidak diperlukan</span>
+              )}
               <button disabled={loggingOut} onClick={logout} className="flex shrink-0 items-center gap-1 text-sm" aria-label="Keluar"><LogOut size={17} />{loggingOut ? 'Keluar…' : 'Keluar'}</button>
               {previewEnabled && <label className="text-xs">Simulasi UI (non-production)<select id="role-preview" aria-label="Simulasi Pratinjau UI Role" className="block max-w-48 rounded border bg-white p-1 text-black" value={role ?? ''} onChange={event => setPreviewRole?.(event.target.value as Role || null)}><option value="">Belum Login</option>{roles.map(value => <option key={value} value={value}>{ROLE_METADATA[value].shortLabel}</option>)}</select></label>}
               <div className={styles.profile}><span>{meta?.badgeCode ?? '—'}</span><div><strong>{meta?.shortLabel ?? 'Belum Login'}</strong><small>{meta?.instansi ?? 'Sesi belum terverifikasi'}</small></div><ChevronDown size={15} /></div>
