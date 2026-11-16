@@ -10,6 +10,10 @@ export async function generateMetadata(): Promise<Metadata> {
     title: 'Cek Status Bantuan Sosial | BansosLedger',
     description:
       'Periksa status penyaluran bantuan sosial menggunakan NIK 16 digit secara aman dan terverifikasi.',
+    robots: {
+      index: false,
+      follow: false,
+    },
   }
 }
 

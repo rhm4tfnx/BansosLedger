@@ -4,6 +4,7 @@ import { getVerifiedServerSession } from '@/lib/auth/session'
 import { hasPermission } from '@/lib/rbac'
 import { Outfit } from 'next/font/google'
 import { DashboardShell } from '@/components/features/dashboard/dashboard-shell'
+import { MaintenanceBanner } from '@/components/shared/maintenance-banner'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +16,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   if (!hasPermission(session.role, 'dashboard:read')) redirect('/explorer')
   return (
     <div className={outfit.variable}>
+      <MaintenanceBanner />
       <DashboardShell
         initialRole={session.role}
         walletVerified={session.walletVerified}
