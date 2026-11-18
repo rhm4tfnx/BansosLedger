@@ -1,6 +1,8 @@
 import 'server-only'
 import {
   safeEventDtoSchema,
+  explorerProgramMetaDtoSchema,
+  explorerTxEventDtoSchema,
   explorerBlockDtoSchema,
   explorerBlockListDtoSchema,
   explorerTxDtoSchema,
@@ -9,6 +11,8 @@ import {
   explorerValidatorsDtoSchema,
   explorerSearchDtoSchema,
   type SafeEventDto,
+  type ExplorerProgramMetaDto,
+  type ExplorerTxEventDto,
   type ExplorerBlockDto,
   type ExplorerBlockListDto,
   type ExplorerTxDto,
@@ -17,6 +21,22 @@ import {
   type ExplorerValidatorsDto,
   type ExplorerSearchDto,
 } from '@/lib/api-contract/dto'
+
+export function toExplorerProgramMetaDto(raw: any): ExplorerProgramMetaDto | null {
+  if (!raw || typeof raw !== 'object') return null
+  const code = typeof raw.code === 'string' ? raw.code.trim() : ''
+  const name = typeof raw.name === 'string' ? raw.name.trim() : ''
+  if (!code && !name) return null
+  const totalBudget =
+    raw.totalBudget != null && Number.isFinite(Number(raw.totalBudget))
+      ? Math.max(0, Math.round(Number(raw.totalBudget)))
+      : null
+  return explorerProgramMetaDtoSchema.parse({
+    code,
+    name,
+    totalBudget,
+  })
+}
 
 export function toSafeEventDto(args: Record<string, any>): SafeEventDto {
   const dto = {
@@ -32,6 +52,44 @@ export function toSafeEventDto(args: Record<string, any>): SafeEventDto {
     wita: args.wita ? String(args.wita) : null,
   }
   return safeEventDtoSchema.parse(dto)
+}
+
+export function toExplorerTxEventDto(args: Record<string, any>): ExplorerTxEventDto {
+  if (args?.name === 'ProgramCreated') {
+    const program = toExplorerProgramMetaDto(args.program)
+    return explorerTxEventDtoSchema.parse({
+      name: 'ProgramCreated',
+      programId: String(args.programId ?? ''),
+      amountPerRecipient: String(args.amountPerRecipient ?? '0'),
+      startPeriod: Number(args.startPeriod ?? 0),
+      endPeriod: Number(args.endPeriod ?? 0),
+      program,
+    })
+  }
+  if (args?.name === 'RecipientsRegistered') {
+    const program = toExplorerProgramMetaDto(args.program)
+    return explorerTxEventDtoSchema.parse({
+      name: 'RecipientsRegistered',
+      programId: String(args.programId ?? ''),
+      count: Math.max(0, Number(args.count ?? 0)),
+      program,
+    })
+  }
+  if (args?.name === 'ProgramClosed') {
+    const program = toExplorerProgramMetaDto(args.program)
+    return explorerTxEventDtoSchema.parse({
+      name: 'ProgramClosed',
+      programId: String(args.programId ?? ''),
+      status: 'CLOSED',
+      program,
+    })
+  }
+  const base = toSafeEventDto(args)
+  return explorerTxEventDtoSchema.parse(
+    args?.name === 'DisbursementRecorded'
+      ? { name: 'DisbursementRecorded', ...base }
+      : base,
+  )
 }
 
 export function toExplorerBlockDto(data: any): ExplorerBlockDto {
@@ -64,7 +122,7 @@ export function toExplorerTxDto(data: any): ExplorerTxDto {
     blockNumber: Number(data.blockNumber ?? 0),
     status: (data.status === 'SUCCESS' ? 'SUCCESS' : 'REVERTED') as 'SUCCESS' | 'REVERTED',
     utc: String(data.utc ?? ''),
-    events: Array.isArray(data.events) ? data.events.map(toSafeEventDto) : [],
+    events: Array.isArray(data.events) ? data.events.map(toExplorerTxEventDto) : [],
   }
   return explorerTxDtoSchema.parse(dto)
 }

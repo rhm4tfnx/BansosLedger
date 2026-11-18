@@ -6,6 +6,7 @@ import type {
   ExplorerContractDto,
   ExplorerSearchDto,
   ExplorerTxDto,
+  ExplorerTxEventDto,
   ExplorerValidatorsDto,
   SafeEventDto,
 } from '@/lib/api-contract'
@@ -16,6 +17,7 @@ import type {
   ExplorerContractViewModel,
   ExplorerEventViewModel,
   ExplorerSearchResultViewModel,
+  ExplorerTxDecodedEventViewModel,
   ExplorerTxViewModel,
   ExplorerValidatorViewModel,
   PaginatedResult,
@@ -29,6 +31,7 @@ export function toExplorerEventViewModel(
   const txHash = 'txHash' in dto ? dto.txHash : undefined
 
   return {
+    name: 'DisbursementRecorded',
     refId: dto.refId,
     programId: dto.programId,
     periodId: dto.period,
@@ -48,6 +51,58 @@ export function toExplorerEventViewModel(
           txHashShort: shortenHash(txHash),
         }
       : {}),
+  }
+}
+
+export function toExplorerTxDecodedEventViewModel(
+  dto: ExplorerTxEventDto,
+): ExplorerTxDecodedEventViewModel {
+  if ('name' in dto && dto.name === 'ProgramCreated') {
+    const parsedAmount = Number.parseInt(dto.amountPerRecipient, 10)
+    const safeAmount = Number.isFinite(parsedAmount) ? parsedAmount : 0
+    const startPeriodLabel = formatPeriodId(dto.startPeriod)
+    const endPeriodLabel = formatPeriodId(dto.endPeriod)
+    const totalBudget = dto.program?.totalBudget ?? null
+    return {
+      name: 'ProgramCreated',
+      programId: dto.programId,
+      amountPerRecipient: safeAmount,
+      amountPerRecipientFormatted: formatRupiah(safeAmount),
+      startPeriod: dto.startPeriod,
+      startPeriodLabel,
+      endPeriod: dto.endPeriod,
+      endPeriodLabel,
+      periodRangeLabel: `${startPeriodLabel} – ${endPeriodLabel}`,
+      programCode: dto.program?.code || null,
+      programName: dto.program?.name || null,
+      totalBudget,
+      totalBudgetFormatted: totalBudget !== null ? formatRupiah(totalBudget) : null,
+    }
+  }
+  if ('name' in dto && dto.name === 'RecipientsRegistered') {
+    const safeCount = Number.isFinite(dto.count) ? Math.max(0, dto.count) : 0
+    return {
+      name: 'RecipientsRegistered',
+      programId: dto.programId,
+      count: safeCount,
+      countFormatted: `${safeCount.toLocaleString('id-ID')} penerima (commitment on-chain)`,
+      programCode: dto.program?.code || null,
+      programName: dto.program?.name || null,
+    }
+  }
+  if ('name' in dto && dto.name === 'ProgramClosed') {
+    return {
+      name: 'ProgramClosed',
+      programId: dto.programId,
+      status: 'CLOSED',
+      statusLabel: 'Ditutup Permanen (CLOSED)',
+      programCode: dto.program?.code || null,
+      programName: dto.program?.name || null,
+    }
+  }
+  return {
+    ...toExplorerEventViewModel(dto),
+    name: 'DisbursementRecorded',
   }
 }
 
@@ -93,7 +148,7 @@ export function toExplorerTxViewModel(dto: ExplorerTxDto): ExplorerTxViewModel {
     statusLabel: dto.status === 'SUCCESS' ? 'Berhasil' : 'Ditolak (Reverted)',
     utc: dto.utc,
     wita: formatWitaDateTime(dto.utc),
-    events: dto.events.map(toExplorerEventViewModel),
+    events: dto.events.map(toExplorerTxDecodedEventViewModel),
   }
 }
 

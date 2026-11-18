@@ -1,4 +1,5 @@
 export interface ExplorerEventViewModel {
+  name?: 'DisbursementRecorded'
   refId: string
   programId: string
   periodId: number
@@ -15,6 +16,50 @@ export interface ExplorerEventViewModel {
   txHash?: string
   txHashShort?: string
 }
+
+export interface ExplorerDisbursementEventViewModel extends ExplorerEventViewModel {
+  name: 'DisbursementRecorded'
+}
+
+export interface ExplorerProgramCreatedEventViewModel {
+  name: 'ProgramCreated'
+  programId: string
+  amountPerRecipient: number
+  amountPerRecipientFormatted: string
+  startPeriod: number
+  startPeriodLabel: string
+  endPeriod: number
+  endPeriodLabel: string
+  periodRangeLabel: string
+  programCode: string | null
+  programName: string | null
+  totalBudget: number | null
+  totalBudgetFormatted: string | null
+}
+
+export interface ExplorerRecipientsRegisteredEventViewModel {
+  name: 'RecipientsRegistered'
+  programId: string
+  count: number
+  countFormatted: string
+  programCode: string | null
+  programName: string | null
+}
+
+export interface ExplorerProgramClosedEventViewModel {
+  name: 'ProgramClosed'
+  programId: string
+  status: 'CLOSED'
+  statusLabel: string
+  programCode: string | null
+  programName: string | null
+}
+
+export type ExplorerTxDecodedEventViewModel =
+  | ExplorerDisbursementEventViewModel
+  | ExplorerProgramCreatedEventViewModel
+  | ExplorerRecipientsRegisteredEventViewModel
+  | ExplorerProgramClosedEventViewModel
 
 export interface ExplorerBlockViewModel {
   number: number
@@ -41,7 +86,7 @@ export interface ExplorerTxViewModel {
   statusLabel: string
   utc: string
   wita: string
-  events: ExplorerEventViewModel[]
+  events: ExplorerTxDecodedEventViewModel[]
 }
 
 export interface ExplorerAddressViewModel {

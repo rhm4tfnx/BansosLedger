@@ -453,6 +453,52 @@ export const explorerBlockListDtoSchema = z.object({
 export type ExplorerBlockListDto = z.infer<typeof explorerBlockListDtoSchema>
 
 // 17. ExplorerTxDto
+export const explorerProgramMetaDtoSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  totalBudget: z.number().int().nonnegative().nullable(),
+}).strict()
+export type ExplorerProgramMetaDto = z.infer<typeof explorerProgramMetaDtoSchema>
+
+export const disbursementRecordedEventDtoSchema = safeEventDtoSchema.extend({
+  name: z.literal('DisbursementRecorded').optional(),
+}).strict()
+export type DisbursementRecordedEventDto = z.infer<typeof disbursementRecordedEventDtoSchema>
+
+export const programCreatedEventDtoSchema = z.object({
+  name: z.literal('ProgramCreated'),
+  programId: z.string(),
+  amountPerRecipient: z.string(),
+  startPeriod: z.number().int(),
+  endPeriod: z.number().int(),
+  program: explorerProgramMetaDtoSchema.nullable().optional(),
+}).strict()
+export type ProgramCreatedEventDto = z.infer<typeof programCreatedEventDtoSchema>
+
+export const recipientsRegisteredEventDtoSchema = z.object({
+  name: z.literal('RecipientsRegistered'),
+  programId: z.string(),
+  count: z.number().int().nonnegative(),
+  program: explorerProgramMetaDtoSchema.nullable().optional(),
+}).strict()
+export type RecipientsRegisteredEventDto = z.infer<typeof recipientsRegisteredEventDtoSchema>
+
+export const programClosedEventDtoSchema = z.object({
+  name: z.literal('ProgramClosed'),
+  programId: z.string(),
+  status: z.literal('CLOSED'),
+  program: explorerProgramMetaDtoSchema.nullable().optional(),
+}).strict()
+export type ProgramClosedEventDto = z.infer<typeof programClosedEventDtoSchema>
+
+export const explorerTxEventDtoSchema = z.union([
+  programCreatedEventDtoSchema,
+  recipientsRegisteredEventDtoSchema,
+  programClosedEventDtoSchema,
+  disbursementRecordedEventDtoSchema,
+])
+export type ExplorerTxEventDto = z.infer<typeof explorerTxEventDtoSchema>
+
 export const explorerTxDtoSchema = z.object({
   txHash: z.string(),
   from: z.string(),
@@ -460,7 +506,7 @@ export const explorerTxDtoSchema = z.object({
   blockNumber: z.number().int().nonnegative(),
   status: z.enum(['SUCCESS', 'REVERTED']),
   utc: z.string(),
-  events: z.array(safeEventDtoSchema),
+  events: z.array(explorerTxEventDtoSchema),
 }).strict()
 export type ExplorerTxDto = z.infer<typeof explorerTxDtoSchema>
 

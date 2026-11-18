@@ -1,7 +1,7 @@
 import 'server-only'
 import { z } from 'zod'
 import { ledgerABI, ledgerInterface } from '@/lib/blockchain/abi'
-import { ChainEvents } from '@/lib/db/models'
+import { ChainEvents, Programs } from '@/lib/db/models'
 import { connectDatabase } from '@/lib/db/connection'
 import { chainConfig, provider, readChain } from '@/modules/chain/config'
 import { chainVerifier } from '@/modules/chain/verifier'
@@ -36,17 +36,111 @@ export async function blocks(request: Request) {
   return json(toExplorerBlockListDto({ data, page, limit, total: latest + 1 }))
 }
 export async function block(_request: Request, params: Record<string, string>) { return json(toExplorerBlockDto(await blockData(z.coerce.number().int().nonnegative().safe().parse(params.n)))) }
+async function loadProgramMetaMap(
+  programIds: string[],
+): Promise<Map<string, { code: string; name: string; totalBudget: number | null }>> {
+  const map = new Map<string, { code: string; name: string; totalBudget: number | null }>()
+  const uniqueLower = Array.from(new Set(programIds.filter(Boolean).map((id) => id.toLowerCase())))
+  if (uniqueLower.length === 0) return map
+  try {
+    await connectDatabase()
+    const candidates = Array.from(
+      new Set([...uniqueLower, ...programIds.filter(Boolean)]),
+    )
+    const rows = await Programs.find({ programId: { $in: candidates } })
+      .select('programId code name totalBudget')
+      .lean()
+    for (const row of rows) {
+      if (!row?.programId) continue
+      map.set(String(row.programId).toLowerCase(), {
+        code: String(row.code ?? ''),
+        name: String(row.name ?? ''),
+        totalBudget:
+          row.totalBudget != null && Number.isFinite(Number(row.totalBudget))
+            ? Number(row.totalBudget)
+            : null,
+      })
+    }
+  } catch {
+    // Off-chain enrichment is best-effort; on-chain receipt data remains authoritative.
+  }
+  return map
+}
+
+type RawDecodedTxEvent =
+  | ({ name: 'DisbursementRecorded' } & ReturnType<typeof safeEvent>)
+  | {
+      name: 'ProgramCreated'
+      programId: string
+      amountPerRecipient: string
+      startPeriod: number
+      endPeriod: number
+    }
+  | {
+      name: 'RecipientsRegistered'
+      programId: string
+      count: number
+    }
+  | {
+      name: 'ProgramClosed'
+      programId: string
+      status: 'CLOSED'
+    }
+
 export async function transaction(_request: Request, params: Record<string, string>) {
   const txHash = hash.parse(params.hash), rpc = provider(), config = chainConfig()
   const receipt = await readChain(() => rpc.getTransactionReceipt(txHash)); if (!receipt) notFound()
   const block = await readChain(() => rpc.getBlock(receipt.blockNumber)); if (!block) notFound()
-  const events = receipt.logs.flatMap(log => {
+  const rawEvents = receipt.logs.flatMap<RawDecodedTxEvent>(log => {
     if (log.address.toLowerCase() !== config.address) return []
     try {
       const parsed = ledgerInterface.parseLog(log)
-      if (parsed?.name !== 'DisbursementRecorded') return []
-      return [safeEvent(Object.fromEntries(parsed.fragment.inputs.map((field, i) => [field.name, parsed.args[i]])))]
+      if (!parsed) return []
+      const args = Object.fromEntries(
+        parsed.fragment.inputs.map((field, i) => [field.name, parsed.args[i]]),
+      )
+      if (parsed.name === 'DisbursementRecorded') {
+        return [{ name: 'DisbursementRecorded' as const, ...safeEvent(args) }]
+      }
+      if (parsed.name === 'ProgramCreated') {
+        return [
+          {
+            name: 'ProgramCreated' as const,
+            programId: String(args.programId ?? ''),
+            amountPerRecipient: String(args.amountPerRecipient ?? '0'),
+            startPeriod: Number(args.startPeriod ?? 0),
+            endPeriod: Number(args.endPeriod ?? 0),
+          },
+        ]
+      }
+      if (parsed.name === 'RecipientsRegistered') {
+        return [
+          {
+            name: 'RecipientsRegistered' as const,
+            programId: String(args.programId ?? ''),
+            count: Number(args.count ?? 0),
+          },
+        ]
+      }
+      if (parsed.name === 'ProgramClosed') {
+        return [
+          {
+            name: 'ProgramClosed' as const,
+            programId: String(args.programId ?? ''),
+            status: 'CLOSED' as const,
+          },
+        ]
+      }
+      return []
     } catch { return [] }
+  })
+  const programMetaMap = await loadProgramMetaMap(
+    rawEvents.map(ev => String(ev.programId ?? '')),
+  )
+  const events = rawEvents.map(ev => {
+    if (ev.name === 'DisbursementRecorded') return ev
+    const meta = programMetaMap.get(String(ev.programId ?? '').toLowerCase()) ?? null
+    return { ...ev, program: meta }
   })
   return json(toExplorerTxDto({ txHash, from: receipt.from, to: receipt.to, blockNumber: receipt.blockNumber, status: receipt.status === 1 ? 'SUCCESS' : 'REVERTED', utc: new Date(block.timestamp * 1000).toISOString(), events }))
 }

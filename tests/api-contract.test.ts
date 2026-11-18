@@ -531,11 +531,72 @@ describe('API Contract V1 - Route Responses Match Zod DTO Schemas', () => {
     const blockData = await blockRes.json()
     expect(explorerBlockDtoSchema.parse(blockData)).toEqual(blockData)
 
-    // GET /api/v1/explorer/tx/[hash]
+    // GET /api/v1/explorer/tx/[hash] (with ProgramCreated, RecipientsRegistered, ProgramClosed, and DisbursementRecorded logs)
+    const { ledgerInterface } = await import('@/lib/blockchain/abi')
+    const sampleProgId = '0x' + '5'.repeat(64)
+    await Programs.create({
+      code: 'BLT-UJI',
+      programId: sampleProgId,
+      name: 'BLT Uji (simulasi)',
+      kind: 'TUNAI',
+      fundSource: 'APBD Kabupaten Barru',
+      amountPerRecipient: 600000,
+      totalBudget: 30000000,
+      startPeriod: 202611,
+      endPeriod: 202702,
+      status: 'ACTIVE',
+      isPublic: true,
+    })
+    const createdLog = ledgerInterface.encodeEventLog('ProgramCreated', [
+      sampleProgId,
+      BigInt(600000),
+      202611,
+      202702,
+    ])
+    const registeredLog = ledgerInterface.encodeEventLog('RecipientsRegistered', [
+      sampleProgId,
+      BigInt(10),
+    ])
+    const closedLog = ledgerInterface.encodeEventLog('ProgramClosed', [sampleProgId])
+    mockRpc.getTransactionReceipt.mockResolvedValueOnce({
+      hash: txHash,
+      from: contract,
+      to: contract,
+      blockNumber: 10,
+      status: 1,
+      logs: [
+        { address: contract, topics: createdLog.topics, data: createdLog.data },
+        { address: contract, topics: registeredLog.topics, data: registeredLog.data },
+        { address: contract, topics: closedLog.topics, data: closedLog.data },
+      ],
+    })
     const txRes = await explorerTxRoute(req(undefined, 'GET', `/api/v1/explorer/tx/${txHash}`), { params: Promise.resolve({ hash: txHash }) })
     expect(txRes.status).toBe(200)
     const txData = await txRes.json()
     expect(explorerTxDtoSchema.parse(txData)).toEqual(txData)
+    expect(txData.events).toHaveLength(3)
+    expect(txData.events[0]).toMatchObject({
+      name: 'ProgramCreated',
+      programId: sampleProgId,
+      amountPerRecipient: '600000',
+      startPeriod: 202611,
+      endPeriod: 202702,
+      program: {
+        code: 'BLT-UJI',
+        name: 'BLT Uji (simulasi)',
+        totalBudget: 30000000,
+      },
+    })
+    expect(txData.events[1]).toMatchObject({
+      name: 'RecipientsRegistered',
+      programId: sampleProgId,
+      count: 10,
+    })
+    expect(txData.events[2]).toMatchObject({
+      name: 'ProgramClosed',
+      programId: sampleProgId,
+      status: 'CLOSED',
+    })
 
     // GET /api/v1/explorer/address/[addr]
     const addrRes = await explorerAddressRoute(req(undefined, 'GET', `/api/v1/explorer/address/${contract}`), { params: Promise.resolve({ addr: contract }) })

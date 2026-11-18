@@ -522,7 +522,7 @@ describe('DTO Mappers - Security & Structure', () => {
     assertNoForbiddenKeys(blockDto)
     expect(blockDto.number).toBe(10)
 
-    // Explorer tx
+    // Explorer tx (DisbursementRecorded, ProgramCreated, RecipientsRegistered, ProgramClosed)
     const txDto = toExplorerTxDto({
       ...dirtyFields,
       txHash: '0x' + 'a'.repeat(64),
@@ -531,19 +531,55 @@ describe('DTO Mappers - Security & Structure', () => {
       blockNumber: 10,
       status: 'SUCCESS',
       utc: new Date().toISOString(),
-      events: [{
-        ...dirtyFields,
-        refId: '0x' + '1'.repeat(64),
-        programId: '0x' + '2'.repeat(64),
-        period: 202601,
-        amount: '300000',
-        commitment: '0x' + '3'.repeat(64),
-        cid: 'bafy' + 'a'.repeat(50),
-        recordedBy: '0x' + '1'.repeat(40),
-      }],
+      events: [
+        {
+          ...dirtyFields,
+          refId: '0x' + '1'.repeat(64),
+          programId: '0x' + '2'.repeat(64),
+          period: 202601,
+          amount: '300000',
+          commitment: '0x' + '3'.repeat(64),
+          cid: 'bafy' + 'a'.repeat(50),
+          recordedBy: '0x' + '1'.repeat(40),
+        },
+        {
+          ...dirtyFields,
+          name: 'ProgramCreated',
+          programId: '0x' + '2'.repeat(64),
+          amountPerRecipient: '600000',
+          startPeriod: 202611,
+          endPeriod: 202702,
+          program: {
+            ...dirtyFields,
+            code: 'BLT-UJI',
+            name: 'BLT Uji (simulasi)',
+            totalBudget: 30000000,
+          },
+        },
+        {
+          ...dirtyFields,
+          name: 'RecipientsRegistered',
+          programId: '0x' + '2'.repeat(64),
+          count: 10,
+          program: {
+            ...dirtyFields,
+            code: 'BLT-UJI',
+            name: 'BLT Uji (simulasi)',
+            totalBudget: 30000000,
+          },
+        },
+        {
+          ...dirtyFields,
+          name: 'ProgramClosed',
+          programId: '0x' + '2'.repeat(64),
+          status: 'CLOSED',
+          program: null,
+        },
+      ],
     })
     assertNoForbiddenKeys(txDto)
     expect(txDto.status).toBe('SUCCESS')
+    expect(txDto.events).toHaveLength(4)
 
     // Explorer address
     const addrDto = toExplorerAddressDto({

@@ -767,6 +767,134 @@ describe('FRONTEND INTEGRATION D — Public Cek Status & Explorer', () => {
     expect(document.body.textContent ?? '').not.toMatch(/WITA\s+WITA/i)
   })
 
+  it('TransactionDetails decodes ProgramCreated (0x57ba...0014), RecipientsRegistered, ProgramClosed, and DisbursementRecorded (0xd7e8...f518) cleanly across 375px and 1440px viewports', async () => {
+    const createProgramTxHash =
+      '0x57ba7fb366702d3f55d3dc63931e0c6bb97e94af89ba8298bc96591afa010014'
+    const disbursementTxHash =
+      '0xd7e87fb366702d3f55d3dc63931e0c6bb97e94af89ba8298bc96591afa01f518'
+    const contractAddr = '0x6e8538440f6b47bfdf2cabcaa97fadb15953979e'
+
+    server.use(
+      http.get(`*/api/v1/explorer/tx/${createProgramTxHash}`, () =>
+        HttpResponse.json({
+          txHash: createProgramTxHash,
+          from: SAMPLE_ADDRESS,
+          to: contractAddr,
+          blockNumber: 2678,
+          status: 'SUCCESS',
+          utc: '2026-11-16T01:00:00.000Z',
+          events: [
+            {
+              name: 'ProgramCreated',
+              programId: SAMPLE_PROGRAM_ID,
+              amountPerRecipient: '600000',
+              startPeriod: 202611,
+              endPeriod: 202702,
+              program: {
+                code: 'BLT-UJI',
+                name: 'BLT Uji (simulasi)',
+                totalBudget: 30000000,
+              },
+            },
+            {
+              name: 'RecipientsRegistered',
+              programId: SAMPLE_PROGRAM_ID,
+              count: 10,
+              program: {
+                code: 'BLT-UJI',
+                name: 'BLT Uji (simulasi)',
+                totalBudget: 30000000,
+              },
+            },
+            {
+              name: 'ProgramClosed',
+              programId: SAMPLE_PROGRAM_ID,
+              status: 'CLOSED',
+              program: {
+                code: 'BLT-UJI',
+                name: 'BLT Uji (simulasi)',
+                totalBudget: 30000000,
+              },
+            },
+          ],
+        }),
+      ),
+      http.get(`*/api/v1/explorer/tx/${disbursementTxHash}`, () =>
+        HttpResponse.json({
+          txHash: disbursementTxHash,
+          from: SAMPLE_ADDRESS,
+          to: contractAddr,
+          blockNumber: 2685,
+          status: 'SUCCESS',
+          utc: '2026-11-16T02:00:00.000Z',
+          events: [
+            {
+              name: 'DisbursementRecorded',
+              refId: SAMPLE_REF_ID,
+              programId: SAMPLE_PROGRAM_ID,
+              period: 202611,
+              amount: '600000',
+              commitment: SAMPLE_COMMITMENT,
+              cid: 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+              gatewayUrl:
+                'https://gateway.pinata.cloud/ipfs/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi',
+              recordedBy: SAMPLE_ADDRESS,
+              utc: '2026-11-16T02:00:00.000Z',
+              wita: '16 November 2026 10.00.00 WITA',
+            },
+          ],
+        }),
+      ),
+    )
+
+    // 1. Mobile viewport (375px): verify ProgramCreated, RecipientsRegistered, ProgramClosed
+    window.innerWidth = 375
+    window.dispatchEvent(new Event('resize'))
+    const queryClient = createTestQueryClient()
+    const { unmount } = render(
+      <QueryClientProvider client={queryClient}>
+        <TransactionDetails txHash={createProgramTxHash} />
+      </QueryClientProvider>,
+    )
+
+    expect(
+      await screen.findByText(/Event Smart Contract Terdekode \(3 event\)/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Event #1: ProgramCreated/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/BLT Uji \(simulasi\) \(BLT-UJI\)/i).length).toBeGreaterThan(0)
+    expect(screen.getByText('Rp 600.000')).toBeInTheDocument()
+    expect(screen.getByText(/November 2026/i)).toBeInTheDocument()
+    expect(screen.getByText(/Februari 2027/i)).toBeInTheDocument()
+    expect(screen.getByText('Rp 30.000.000')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Metadata program off-chain \(MongoDB · read-only\)/i),
+    ).toBeInTheDocument()
+
+    expect(screen.getByText(/Event #2: RecipientsRegistered/i)).toBeInTheDocument()
+    expect(screen.getByText(/10 penerima \(commitment on-chain\)/i)).toBeInTheDocument()
+
+    expect(screen.getByText(/Event #3: ProgramClosed/i)).toBeInTheDocument()
+    expect(screen.getByText(/Ditutup Permanen \(CLOSED\)/i)).toBeInTheDocument()
+    unmount()
+
+    // 2. Desktop viewport (1440px): verify DisbursementRecorded (0xd7e8...f518)
+    window.innerWidth = 1440
+    window.dispatchEvent(new Event('resize'))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <TransactionDetails txHash={disbursementTxHash} />
+      </QueryClientProvider>,
+    )
+
+    expect(
+      await screen.findByText(/Event Smart Contract Terdekode \(1 event\)/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Event #1: DisbursementRecorded/i)).toBeInTheDocument()
+    expect(screen.getByText('Rp 600.000')).toBeInTheDocument()
+    expect(screen.getByText(SAMPLE_COMMITMENT)).toBeInTheDocument()
+    expect(screen.getByText(SAMPLE_REF_ID)).toBeInTheDocument()
+  })
+
   it('HashLink kind="search" links to /explorer?q=... and BlockExplorer auto-triggers search from ?q=', async () => {
     const { unmount } = render(
       <div>

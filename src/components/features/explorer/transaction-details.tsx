@@ -212,17 +212,136 @@ export function TransactionDetails({ txHash }: TransactionDetailsProps) {
               </dl>
             </section>
 
-            <section className={panel} aria-label="Decoded DisbursementRecorded events">
+            <section className={panel} aria-label="Event Smart Contract Terdekode">
               <h2 className="mb-4 text-sm font-semibold">
-                Data penyaluran terdekode ({tx.events.length} event)
+                Event Smart Contract Terdekode ({tx.events.length} event)
               </h2>
               {tx.events.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Tidak ada event DisbursementRecorded pada transaksi ini.
+                  Tidak ada event BansosLedger yang terdekode pada transaksi ini.
                 </p>
               ) : (
                 <div className="flex flex-col gap-6">
                   {tx.events.map((ev, idx) => {
+                    if (ev.name === 'ProgramCreated') {
+                      return (
+                        <div
+                          key={`ProgramCreated-${ev.programId}-${idx}`}
+                          className="rounded-control border bg-secondary/20 p-4"
+                        >
+                          <p className="mb-2 font-mono text-xs font-semibold text-primary">
+                            Event #{idx + 1}: ProgramCreated
+                          </p>
+                          <dl>
+                            <Row label="Program ID">
+                              <code className="break-all font-mono text-xs">{ev.programId}</code>
+                            </Row>
+                            {(ev.programName || ev.programCode) && (
+                              <Row label="Referensi program (off-chain)">
+                                <span className="font-medium">
+                                  {ev.programName ?? '—'}
+                                  {ev.programCode ? ` (${ev.programCode})` : ''}
+                                </span>
+                              </Row>
+                            )}
+                            <Row label="Nominal bantuan per penerima (amountPerRecipient)">
+                              <span className="font-mono font-semibold">
+                                {ev.amountPerRecipientFormatted}
+                              </span>
+                            </Row>
+                            <Row label="Periode mulai (startPeriod)">
+                              <span>
+                                {ev.startPeriodLabel}{' '}
+                                <code className="font-mono text-xs text-muted-foreground">
+                                  ({ev.startPeriod})
+                                </code>
+                              </span>
+                            </Row>
+                            <Row label="Periode selesai (endPeriod)">
+                              <span>
+                                {ev.endPeriodLabel}{' '}
+                                <code className="font-mono text-xs text-muted-foreground">
+                                  ({ev.endPeriod})
+                                </code>
+                              </span>
+                            </Row>
+                            {ev.totalBudgetFormatted && (
+                              <Row label="Total pagu anggaran (metadata off-chain)">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-mono font-semibold">
+                                    {ev.totalBudgetFormatted}
+                                  </span>
+                                  <span className="rounded-label border bg-white px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                    Metadata program off-chain (MongoDB · read-only)
+                                  </span>
+                                </div>
+                              </Row>
+                            )}
+                          </dl>
+                        </div>
+                      )
+                    }
+
+                    if (ev.name === 'RecipientsRegistered') {
+                      return (
+                        <div
+                          key={`RecipientsRegistered-${ev.programId}-${idx}`}
+                          className="rounded-control border bg-secondary/20 p-4"
+                        >
+                          <p className="mb-2 font-mono text-xs font-semibold text-primary">
+                            Event #{idx + 1}: RecipientsRegistered
+                          </p>
+                          <dl>
+                            <Row label="Program ID">
+                              <code className="break-all font-mono text-xs">{ev.programId}</code>
+                            </Row>
+                            {(ev.programName || ev.programCode) && (
+                              <Row label="Referensi program (off-chain)">
+                                <span className="font-medium">
+                                  {ev.programName ?? '—'}
+                                  {ev.programCode ? ` (${ev.programCode})` : ''}
+                                </span>
+                              </Row>
+                            )}
+                            <Row label="Jumlah penerima terdaftar (count)">
+                              <span className="font-mono font-semibold">{ev.countFormatted}</span>
+                            </Row>
+                          </dl>
+                        </div>
+                      )
+                    }
+
+                    if (ev.name === 'ProgramClosed') {
+                      return (
+                        <div
+                          key={`ProgramClosed-${ev.programId}-${idx}`}
+                          className="rounded-control border bg-secondary/20 p-4"
+                        >
+                          <p className="mb-2 font-mono text-xs font-semibold text-primary">
+                            Event #{idx + 1}: ProgramClosed
+                          </p>
+                          <dl>
+                            <Row label="Program ID">
+                              <code className="break-all font-mono text-xs">{ev.programId}</code>
+                            </Row>
+                            {(ev.programName || ev.programCode) && (
+                              <Row label="Referensi program (off-chain)">
+                                <span className="font-medium">
+                                  {ev.programName ?? '—'}
+                                  {ev.programCode ? ` (${ev.programCode})` : ''}
+                                </span>
+                              </Row>
+                            )}
+                            <Row label="Status penutupan program">
+                              <span className="inline-flex items-center gap-1.5 rounded-label border bg-secondary px-2.5 py-1 font-mono text-xs font-medium text-primary">
+                                {ev.statusLabel}
+                              </span>
+                            </Row>
+                          </dl>
+                        </div>
+                      )
+                    }
+
                     const isWithdrawn =
                       Boolean(ev.cid) &&
                       (!ev.gatewayUrl ||

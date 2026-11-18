@@ -516,7 +516,12 @@ describe('API DTO -> ViewModel adapters (all domains)', () => {
         },
       ],
     }
-    expect(toExplorerTxViewModel(txDto).events[0]?.amountFormatted).toBe('Rp 600.000')
+    const txVm = toExplorerTxViewModel(txDto)
+    const firstEv = txVm.events[0]
+    expect(firstEv?.name).toBe('DisbursementRecorded')
+    if (firstEv?.name === 'DisbursementRecorded') {
+      expect(firstEv.amountFormatted).toBe('Rp 600.000')
+    }
 
     const addrDto = {
       address: '0x' + '3'.repeat(40),
