@@ -235,6 +235,18 @@ export async function session() {
   }
 }
 
+class WalletValidationError extends Error {
+  readonly status: number
+  readonly code: string
+
+  constructor(status: number, code: string, message: string) {
+    super(message)
+    this.name = 'WalletValidationError'
+    this.status = status
+    this.code = code
+  }
+}
+
 async function walletInput(request: Request) {
   const body = await request.json()
   if (
@@ -247,8 +259,20 @@ async function walletInput(request: Request) {
   const chainId = getEnv('NEXT_PUBLIC_CHAIN_ID')
   if (!chainId) throw new ServiceUnavailableError()
   const address = getAddress(body.address)
-  if (BigInt(body.chainId) !== BigInt(chainId) || address !== (await expectedWallet()))
-    throw new Error('Wallet mismatch')
+  if (BigInt(body.chainId) !== BigInt(chainId)) {
+    throw new WalletValidationError(
+      400,
+      'WALLET_CHAIN_MISMATCH',
+      `Jaringan wallet tidak sesuai. Pindah ke jaringan Hyperledger Besu (Chain ID ${chainId}).`,
+    )
+  }
+  if (address !== (await expectedWallet())) {
+    throw new WalletValidationError(
+      403,
+      'WALLET_UNAUTHORIZED',
+      'Wallet tidak valid. Alamat ini bukan wallet resmi Kelurahan yang terdaftar pada kontrak pintar.',
+    )
+  }
   return { address, chainId, signature: body.signature }
 }
 
@@ -271,6 +295,12 @@ export async function nonce(request: Request) {
     return NextResponse.json({ message }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     if (error instanceof ServiceUnavailableError) return backendError(error)
+    if (error instanceof WalletValidationError) {
+      return NextResponse.json(
+        { code: error.code, message: error.message },
+        { status: error.status },
+      )
+    }
     return NextResponse.json({ message: 'Permintaan wallet tidak valid.' }, { status: 400 })
   }
 }
@@ -344,6 +374,12 @@ export async function bind(request: Request) {
     return response
   } catch (error) {
     if (error instanceof ServiceUnavailableError) return backendError(error)
+    if (error instanceof WalletValidationError) {
+      return NextResponse.json(
+        { code: error.code, message: error.message },
+        { status: error.status },
+      )
+    }
     return NextResponse.json(
       { message: 'Tantangan kedaluwarsa atau tanda tangan tidak valid. Ulangi verifikasi.' },
       { status: 403 },

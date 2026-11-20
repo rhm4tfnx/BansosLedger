@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import { Copy, LockKeyhole, RotateCw, Wallet } from 'lucide-react'
 import { useRoleAccess } from '@/hooks/use-role-access'
-import { formatApiError } from '@/lib/api/errors'
+import { ApiClientError, formatApiError } from '@/lib/api/errors'
 import {
   useSession,
   useWalletBindMutation,
   useWalletNonceMutation,
 } from '@/lib/api/hooks/auth'
 import { useWalletStatusQuery } from '@/lib/api/hooks/chain'
-import { getExpectedChainId, toHexChainId, useWallet } from '@/lib/wallet'
+import { formatWalletError, getExpectedChainId, toHexChainId, useWallet } from '@/lib/wallet'
 import { WalletPanels } from '@/components/features/dashboard/wallet/wallet-panels'
 import { HashLink } from '@/components/features/dashboard/shared/hash-link'
 import {
@@ -41,28 +41,48 @@ export function WalletRegistry() {
   const browserWallet = useWallet()
   const nonceMutation = useWalletNonceMutation()
   const bindMutation = useWalletBindMutation()
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
   const [binding, setBinding] = useState(false)
 
   const wallet = walletQuery.data
+  const authorizedWallet = wallet?.authorizedWallet ?? null
   const boundWallet = wallet?.boundWallet ?? sessionQuery.data?.boundWalletAddress ?? null
   const boundWalletShort = wallet?.boundWalletShort ?? (boundWallet ? `${boundWallet.slice(0, 6)}…${boundWallet.slice(-4)}` : '-')
-  const walletMatchesAuthorized =
-    Boolean(boundWallet && wallet?.authorizedWallet) &&
-    boundWallet?.toLowerCase() === wallet?.authorizedWallet?.toLowerCase()
+  const sessionVerified = Boolean(sessionQuery.data?.walletVerified)
+  const activeBrowserAddress = browserWallet.address
+  const boundMatchesAuthorized =
+    Boolean(boundWallet && authorizedWallet) &&
+    boundWallet?.toLowerCase() === authorizedWallet?.toLowerCase()
+  const activeAccountMismatchesAuthorized =
+    Boolean(activeBrowserAddress && authorizedWallet) &&
+    activeBrowserAddress?.toLowerCase() !== authorizedWallet?.toLowerCase()
+  const sessionWalletCompliant =
+    sessionVerified && boundMatchesAuthorized && !activeAccountMismatchesAuthorized
+
+  const complianceReason = sessionWalletCompliant
+    ? '✓ Terverifikasi sesi'
+    : activeAccountMismatchesAuthorized
+      ? sessionVerified
+        ? '× Akun MetaMask aktif bukan wallet resmi'
+        : '× Belum diverifikasi · Akun MetaMask aktif bukan wallet resmi'
+      : !sessionVerified
+        ? '× Belum diverifikasi'
+        : !boundWallet
+          ? '× Wallet sesi belum terikat'
+          : '× Wallet sesi berbeda dari wallet resmi'
 
   async function handleBindWallet() {
     if (binding) return
     setBinding(true)
-    setNotice('')
+    setNotice(null)
     try {
       const connectedAddress = browserWallet.address ?? (await browserWallet.connect())
       if (!connectedAddress) {
-        setNotice('Hubungkan wallet MetaMask terlebih dahulu.')
+        setNotice({ tone: 'error', message: 'Hubungkan wallet MetaMask terlebih dahulu.' })
         return
       }
       const numericChainId =
-        browserWallet.chainId ?? wallet?.chainId ?? getExpectedChainId() ?? 1337
+        browserWallet.chainId ?? wallet?.chainId ?? getExpectedChainId() ?? 250204
       const chainIdHex = toHexChainId(numericChainId)
 
       const { message } = await nonceMutation.mutateAsync({
@@ -77,9 +97,13 @@ export function WalletRegistry() {
         signature,
       })
       await Promise.all([sessionQuery.refetch(), walletQuery.refetch()])
-      setNotice('Wallet sesi Kelurahan berhasil diikat dan diverifikasi.')
+      setNotice({ tone: 'success', message: 'Wallet sesi Kelurahan berhasil diikat dan diverifikasi.' })
     } catch (err) {
-      setNotice(formatApiError(err).message)
+      const message =
+        err instanceof ApiClientError
+          ? formatApiError(err).message
+          : formatWalletError(err, 'Gagal mengikat wallet sesi.')
+      setNotice({ tone: 'error', message })
     } finally {
       setBinding(false)
     }
@@ -88,9 +112,9 @@ export function WalletRegistry() {
   async function copyText(value: string) {
     try {
       await navigator.clipboard.writeText(value)
-      setNotice('Teks dokumentasi berhasil disalin.')
+      setNotice({ tone: 'success', message: 'Teks dokumentasi berhasil disalin.' })
     } catch {
-      setNotice('Gagal menyalin teks ke papan klip.')
+      setNotice({ tone: 'error', message: 'Gagal menyalin teks ke papan klip.' })
     }
   }
 
@@ -132,8 +156,12 @@ export function WalletRegistry() {
       </section>
 
       {notice && (
-        <div className={s.inset} role="status">
-          {notice}
+        <div
+          className={notice.tone === 'error' ? w.noticeError : w.noticeSuccess}
+          role={notice.tone === 'error' ? 'alert' : 'status'}
+          aria-live={notice.tone === 'error' ? 'assertive' : 'polite'}
+        >
+          {notice.message}
         </div>
       )}
 
@@ -190,11 +218,13 @@ export function WalletRegistry() {
               </article>
               <article className={s.card}>
                 <small>Kesesuaian wallet sesi</small>
-                <strong className={s.number}>
-                  {!boundWallet ? 'Belum terikat' : walletMatchesAuthorized ? 'Sesuai' : 'Berbeda'}
+                <strong
+                  className={`${s.number} ${sessionWalletCompliant ? w.green : w.red}`}
+                >
+                  {sessionWalletCompliant ? 'Sesuai' : 'Tidak sesuai'}
                 </strong>
-                <span className={s.badge}>
-                  {sessionQuery.data?.walletVerified ? '✓ Terverifikasi sesi' : 'Belum diverifikasi'}
+                <span className={sessionWalletCompliant ? w.authorized : w.revoked}>
+                  {complianceReason}
                 </span>
               </article>
             </div>
@@ -253,12 +283,16 @@ export function WalletRegistry() {
                       <HashLink hash={boundWallet} short={boundWalletShort} kind="address" />
                     </td>
                     <td>
-                      <span className={walletMatchesAuthorized ? w.authorized : s.badge}>
-                        {!boundWallet
-                          ? '- BELUM TERIKAT'
-                          : walletMatchesAuthorized
-                            ? '✓ COCOK DENGAN WALLET RESMI'
-                            : '⚠ TIDAK COCOK'}
+                      <span className={sessionWalletCompliant ? w.authorized : w.revoked}>
+                        {sessionWalletCompliant
+                          ? '✓ COCOK DENGAN WALLET RESMI'
+                          : activeAccountMismatchesAuthorized
+                            ? '× AKUN METAMASK TIDAK COCOK'
+                            : !boundWallet
+                              ? '- BELUM TERIKAT'
+                              : !sessionVerified
+                                ? '× BELUM DIVERIFIKASI'
+                                : '⚠ TIDAK COCOK'}
                       </span>
                     </td>
                     <td>

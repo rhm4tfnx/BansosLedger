@@ -63,12 +63,36 @@ function AnomalyList({ title, items }: { title: string; items: ReconciliationAno
       {items.length === 0 ? (
         <p>Tidak ada anomali.</p>
       ) : (
-        <ul>
+        <ul className={s.anomalyList}>
           {items.map((item) => (
-            <li key={`${item.refId}-${item.code}`}>
-              <strong title={item.refId}>{item.refIdShort}</strong> · <code>{item.code}</code>
+            <li key={`${item.refId}-${item.code}`} className={s.anomalyItem}>
+              <div>
+                <strong title={item.refId}>{item.refIdShort}</strong> · <code>{item.code}</code>
+              </div>
               <p>{item.message}</p>
               <HashLink hash={item.txHash} short={item.txHashShort} />
+              {item.diffs && item.diffs.length > 0 && (
+                <div className={s.diffBox} aria-label="Rincian perbedaan off-chain dan on-chain">
+                  <div className={s.diffHeader}>Perbandingan Field (Off-chain vs On-chain)</div>
+                  <div className={s.diffList}>
+                    {item.diffs.map((diff) => (
+                      <div key={diff.field} className={s.diffRow}>
+                        <span className={s.diffField}>{diff.label}</span>
+                        <div className={s.diffValues}>
+                          <div>
+                            <small>Off-chain (DB)</small>
+                            <code className={s.diffOffChain}>{diff.offChain}</code>
+                          </div>
+                          <div>
+                            <small>On-chain (Besu)</small>
+                            <code className={s.diffOnChain}>{diff.onChain}</code>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>

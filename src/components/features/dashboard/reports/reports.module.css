@@ -552,6 +552,91 @@
 .auditError h3 {
   margin-top: 18px;
 }
+.anomalyList {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.anomalyItem {
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+  min-width: 0;
+}
+.diffBox {
+  margin-top: 10px;
+  border: 1px solid #fecdca;
+  border-radius: 8px;
+  background: #fffbfa;
+  padding: 10px;
+  min-width: 0;
+}
+.diffHeader {
+  font-size: 10px;
+  font-weight: 600;
+  color: #b42318;
+  margin-bottom: 8px;
+}
+.diffList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.diffRow {
+  border-top: 1px solid #fee4e2;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.diffRow:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.diffField {
+  font-size: 10px;
+  font-weight: 600;
+  color: #344054;
+}
+.diffValues {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.diffValues > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.diffOffChain,
+.diffOnChain {
+  display: block;
+  font-family: monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 4px 6px;
+  border-radius: 5px;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+.diffOffChain {
+  background: #fef3f2;
+  color: #b42318;
+}
+.diffOnChain {
+  background: #ecfdf3;
+  color: #027a48;
+}
+@media (max-width: 640px) {
+  .diffValues {
+    grid-template-columns: 1fr;
+  }
+}
 .hash {
   display: inline-flex;
   align-items: center;

@@ -451,4 +451,46 @@ describe('Wallet layer — store, useWallet(), and <WalletGate>', () => {
       expect(screen.getByText('Konten Terlindungi')).toBeInTheDocument()
     })
   })
+
+  it('normalizes raw RPC/ethers errors to Indonesian and renders WalletGate feedbackBanner with overflow protection', async () => {
+    const { formatWalletError, WALLET_RPC_UNAVAILABLE_MESSAGE } = await import('@/lib/wallet')
+    const rawRpcError = Object.assign(
+      new Error(
+        'could not coalesce error (error={ "code": -32603, "message": "RPC endpoint not found or unavailable." }, payload={ "id": 1, "jsonrpc": "2.0", "method": "eth_sendTransaction" })',
+      ),
+      { code: -32603 },
+    )
+    expect(formatWalletError(rawRpcError)).toBe(WALLET_RPC_UNAVAILABLE_MESSAGE)
+    expect(formatWalletError(new Error('Failed to fetch'))).toBe(WALLET_RPC_UNAVAILABLE_MESSAGE)
+
+    process.env.NEXT_PUBLIC_CHAIN_ID = '1337'
+    const readyEth = createMockEthereum({
+      initialAccounts: [BOUND_ADDRESS],
+      initialChainIdHex: '0x539',
+    })
+    window.ethereum = readyEth.provider
+
+    window.innerWidth = 375
+    window.dispatchEvent(new Event('resize'))
+    render(
+      <WalletGate boundWalletAddress={BOUND_ADDRESS} enableSessionQuery={false}>
+        <div>Konten Terlindungi</div>
+      </WalletGate>,
+      { wrapper: createWrapper() },
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Konten Terlindungi')).toBeInTheDocument()
+    })
+
+    act(() => {
+      useWalletStore.getState().setWalletError(formatWalletError(rawRpcError))
+    })
+
+    const alertEl = await screen.findByRole('alert')
+    expect(alertEl).toHaveTextContent(WALLET_RPC_UNAVAILABLE_MESSAGE)
+    const textSpan = screen.getByText(WALLET_RPC_UNAVAILABLE_MESSAGE)
+    expect(textSpan.className).toContain('min-w-0')
+    expect(textSpan.className).toContain('break-words')
+    expect(textSpan.className).toContain('[overflow-wrap:anywhere]')
+  })
 })

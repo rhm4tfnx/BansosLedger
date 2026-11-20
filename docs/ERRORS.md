@@ -84,4 +84,6 @@ Setiap respons error pada API v1 mengikuti spesifikasi RFC 9457 (`application/pr
 | `UNAUTHORIZED` | 401 | Akses cron ditolak. |
 | `UNKNOWN` | 500 | Transaksi ditolak jaringan atau terjadi kesalahan yang tidak diketahui. |
 | `VALIDATION_ERROR` | 400 | Parameter permintaan tidak valid. |
+| `WALLET_CHAIN_MISMATCH` | 400 | Jaringan wallet tidak sesuai. Pindah ke jaringan Hyperledger Besu (Chain ID 250204). |
 | `WALLET_NOT_VERIFIED` | 403 | Wallet belum diverifikasi. |
+| `WALLET_UNAUTHORIZED` | 403 | Wallet tidak valid. Alamat ini bukan wallet resmi Kelurahan yang terdaftar pada kontrak pintar. |

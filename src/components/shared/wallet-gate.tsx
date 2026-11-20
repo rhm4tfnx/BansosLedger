@@ -53,17 +53,19 @@ export function WalletGate({
       <div
         role="alert"
         aria-live="assertive"
-        className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+        className="mb-3 flex min-w-0 items-start justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
       >
-        <div className="flex items-start gap-2.5">
+        <div className="flex min-w-0 flex-1 items-start gap-2.5">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden="true" />
-          <span>{wallet.lastError ?? 'Transaksi dibatalkan di wallet'}</span>
+          <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
+            {wallet.lastError ?? 'Transaksi dibatalkan di wallet'}
+          </span>
         </div>
         <button
           type="button"
           aria-label="Tutup pesan wallet"
           onClick={wallet.clearWalletFeedback}
-          className="inline-flex size-6 items-center justify-center rounded-md text-amber-900 hover:bg-amber-100"
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-amber-900 hover:bg-amber-100"
         >
           <X className="size-3.5" aria-hidden="true" />
         </button>

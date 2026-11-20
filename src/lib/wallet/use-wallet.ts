@@ -3,6 +3,7 @@
 import { useCallback, useEffect } from 'react'
 import { BrowserProvider, type Eip1193Provider } from 'ethers'
 import { useSession } from '@/lib/api/hooks/auth'
+import { formatWalletError } from './errors'
 import {
   useWalletStore,
   WALLET_USER_REJECTED_MESSAGE,
@@ -188,6 +189,16 @@ export function useWallet(options: UseWalletOptions = {}) {
 
   useEffect(() => {
     void inspectWallet()
+    const handleInitialized = () => {
+      void inspectWallet()
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('ethereum#initialized', handleInitialized)
+      return () => {
+        window.removeEventListener('ethereum#initialized', handleInitialized)
+      }
+    }
+    return undefined
   }, [inspectWallet])
 
   useEffect(() => {
@@ -267,12 +278,9 @@ export function useWallet(options: UseWalletOptions = {}) {
         setRejected(WALLET_USER_REJECTED_MESSAGE)
         throw new Error(WALLET_USER_REJECTED_MESSAGE)
       }
-      const message =
-        err instanceof Error && err.message
-          ? err.message
-          : 'Gagal menghubungkan wallet MetaMask.'
+      const message = formatWalletError(err, 'Gagal menghubungkan wallet MetaMask.')
       setWalletError(message)
-      throw err
+      throw new Error(message)
     }
   }, [
     boundWalletAddress,
@@ -377,12 +385,9 @@ export function useWallet(options: UseWalletOptions = {}) {
           setRejected(WALLET_USER_REJECTED_MESSAGE)
           throw new Error(WALLET_USER_REJECTED_MESSAGE)
         }
-        const message =
-          err instanceof Error && err.message
-            ? err.message
-            : 'Gagal mengirim transaksi melalui wallet.'
+        const message = formatWalletError(err, 'Gagal mengirim transaksi melalui wallet.')
         setWalletError(message)
-        throw err
+        throw new Error(message)
       }
     },
     [clearWalletFeedback, setPendingTx, setRejected, setWalletError],
@@ -414,12 +419,9 @@ export function useWallet(options: UseWalletOptions = {}) {
           setRejected(WALLET_USER_REJECTED_MESSAGE)
           throw new Error(WALLET_USER_REJECTED_MESSAGE)
         }
-        const errMessage =
-          err instanceof Error && err.message
-            ? err.message
-            : 'Gagal menandatangani pesan di wallet.'
+        const errMessage = formatWalletError(err, 'Gagal menandatangani pesan di wallet.')
         setWalletError(errMessage)
-        throw err
+        throw new Error(errMessage)
       }
     },
     [clearWalletFeedback, setRejected, setWalletError],

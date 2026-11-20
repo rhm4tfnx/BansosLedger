@@ -278,6 +278,13 @@ export interface RealizationReportViewModel {
   totalPages: number
 }
 
+export interface ReconciliationDiffViewModel {
+  field: string
+  label: string
+  offChain: string
+  onChain: string
+}
+
 export interface ReconciliationAnomalyViewModel {
   refId: string
   refIdShort: string
@@ -285,6 +292,7 @@ export interface ReconciliationAnomalyViewModel {
   txHashShort: string
   code: string
   message: string
+  diffs?: ReconciliationDiffViewModel[]
 }
 
 export interface ReconciliationViewModel {

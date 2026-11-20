@@ -50,10 +50,29 @@ export function toRealizationReportViewModel(
   }
 }
 
+function formatDiffValue(field: string, value: string | null): string {
+  if (value === null || value === '') return '—'
+  if (field === 'amount') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return formatRupiah(parsed)
+  }
+  if (field === 'periodId') {
+    const parsed = Number(value)
+    if (Number.isInteger(parsed)) return `${formatPeriodId(parsed)} (${parsed})`
+  }
+  return value
+}
+
 function toAnomalyViewModel(item: {
   refId: string
   txHash: string | null
   code: string
+  diffs?: Array<{
+    field: string
+    label: string
+    offChain: string | null
+    onChain: string | null
+  }>
 }): ReconciliationAnomalyViewModel {
   return {
     refId: item.refId,
@@ -62,6 +81,16 @@ function toAnomalyViewModel(item: {
     txHashShort: shortenHash(item.txHash),
     code: item.code,
     message: mapApiErrorCode(item.code),
+    ...(item.diffs && item.diffs.length > 0
+      ? {
+          diffs: item.diffs.map((d) => ({
+            field: d.field,
+            label: d.label,
+            offChain: formatDiffValue(d.field, d.offChain),
+            onChain: formatDiffValue(d.field, d.onChain),
+          })),
+        }
+      : {}),
   }
 }
 

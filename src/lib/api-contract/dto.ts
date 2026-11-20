@@ -297,6 +297,14 @@ export const realizationReportDtoSchema = z.object({
 export type RealizationReportDto = z.infer<typeof realizationReportDtoSchema>
 
 // 9. ReconciliationDto
+export const reconciliationDiffDtoSchema = z.object({
+  field: z.string(),
+  label: z.string(),
+  offChain: z.string().nullable(),
+  onChain: z.string().nullable(),
+}).strict()
+export type ReconciliationDiffDto = z.infer<typeof reconciliationDiffDtoSchema>
+
 export const reconciliationDtoSchema = z.object({
   db: z.object({
     count: z.number().int().nonnegative(),
@@ -312,11 +320,13 @@ export const reconciliationDtoSchema = z.object({
       refId: z.string(),
       txHash: z.string().nullable(),
       code: z.string(),
+      diffs: z.array(reconciliationDiffDtoSchema).optional(),
     }).strict()),
     inconsistentEvents: z.array(z.object({
       refId: z.string(),
       txHash: z.string(),
       code: z.string(),
+      diffs: z.array(reconciliationDiffDtoSchema).optional(),
     }).strict()),
     page: z.number().int().positive(),
     limitPerCategory: z.number().int().positive(),

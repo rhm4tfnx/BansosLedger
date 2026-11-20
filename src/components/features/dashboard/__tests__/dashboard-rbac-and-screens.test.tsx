@@ -484,4 +484,171 @@ describe('Role-based action visibility & Part B read-only screens', () => {
       expect(requestedDisbursementStatus).toBe('FAILED')
     })
   })
+
+  it('Reports renders field-level Off-chain vs On-chain diffs for MISMATCH anomalies', async () => {
+    server.use(
+      http.get('*/api/v1/programs', () =>
+        HttpResponse.json({ data: [], total: 0, page: 1, limit: 100, totalPages: 1 }),
+      ),
+      http.get('*/api/v1/reports/realization', () =>
+        HttpResponse.json({
+          filters: {},
+          summary: {
+            pagu: 6000000,
+            target: 10,
+            realisasi: { count: 1, rupiah: 600000 },
+            sisa: 5400000,
+            percentage: 10,
+          },
+          data: [],
+          txHashes: [],
+          total: 0,
+          page: 1,
+          limit: 20,
+          totalPages: 1,
+        }),
+      ),
+      http.get('*/api/v1/reports/reconciliation', () =>
+        HttpResponse.json({
+          db: { count: 1, amount: 600000 },
+          chain: { count: 1, amount: 600000 },
+          indexedThrough: 512,
+          anomalies: {
+            missingEvents: [],
+            inconsistentEvents: [
+              {
+                refId: '0x' + 'a'.repeat(64),
+                txHash: '0x' + 'b'.repeat(64),
+                code: 'MISMATCH',
+                diffs: [
+                  {
+                    field: 'evidenceCid',
+                    label: 'CID bukti IPFS',
+                    offChain: 'bafy-offchain-modified-cid',
+                    onChain: 'bafy-onchain-original-cid',
+                  },
+                  {
+                    field: 'amount',
+                    label: 'Nominal bantuan',
+                    offChain: '750000',
+                    onChain: '600000',
+                  },
+                ],
+              },
+            ],
+            page: 1,
+            limitPerCategory: 20,
+          },
+        }),
+      ),
+    )
+
+    renderForRole(<Reports />, 'OPERATOR_KELURAHAN')
+    const diffBox = await screen.findByLabelText(/Rincian perbedaan off-chain dan on-chain/i)
+    expect(diffBox).toHaveTextContent(/Perbandingan Field \(Off-chain vs On-chain\)/i)
+    expect(diffBox).toHaveTextContent('CID bukti IPFS')
+    expect(diffBox).toHaveTextContent('bafy-offchain-modified-cid')
+    expect(diffBox).toHaveTextContent('bafy-onchain-original-cid')
+    expect(diffBox).toHaveTextContent('Rp 750.000')
+    expect(diffBox).toHaveTextContent('Rp 600.000')
+  })
+
+  it('WalletRegistry shows real-time red Tidak sesuai when unverified or active MetaMask account mismatches, and displays specific 403 bind error', async () => {
+    const authWallet = '0x' + '1'.repeat(40)
+    const strangerWallet = '0x' + '9'.repeat(40)
+    const ownerWallet = '0x' + '2'.repeat(40)
+    const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
+    const originalEthereum = (window as { ethereum?: unknown }).ethereum
+
+    const mockEthereum = {
+      isMetaMask: true,
+      request: vi.fn(async ({ method }: { method: string }) => {
+        if (method === 'eth_accounts' || method === 'eth_requestAccounts') return [authWallet]
+        if (method === 'eth_chainId') return '0x3d15c'
+        return null
+      }),
+      on: vi.fn((event: string, fn: (...args: unknown[]) => void) => {
+        if (!listeners.has(event)) listeners.set(event, new Set())
+        listeners.get(event)!.add(fn)
+      }),
+      removeListener: vi.fn((event: string, fn: (...args: unknown[]) => void) => {
+        listeners.get(event)?.delete(fn)
+      }),
+    }
+    ;(window as { ethereum?: unknown }).ethereum = mockEthereum
+
+    server.use(
+      http.get('*/api/v1/auth/me', () =>
+        HttpResponse.json({
+          id: 'u-1',
+          name: 'Rahmat Operator',
+          institution: 'Kelurahan Takkalasi',
+          email: 'rahmat@barrukab.go.id',
+          role: 'OPERATOR',
+          mustChangePassword: false,
+          walletVerified: true,
+          boundWalletAddress: authWallet,
+          expiresAt: 1790000000000,
+        }),
+      ),
+      http.get('*/api/v1/wallet/status', () =>
+        HttpResponse.json({
+          authorizedWallet: authWallet,
+          owner: ownerWallet,
+          chainId: 250204,
+          paused: false,
+          networkOk: true,
+          boundWallet: authWallet,
+        }),
+      ),
+      http.get('*/api/v1/explorer/validators', () =>
+        HttpResponse.json({ data: [], count: 4 }),
+      ),
+      http.post('*/api/v1/auth/wallet/nonce', () =>
+        HttpResponse.json(
+          {
+            type: 'urn:bansos:error:WALLET_UNAUTHORIZED',
+            title: 'Wallet tidak valid.',
+            status: 403,
+            code: 'WALLET_UNAUTHORIZED',
+            message:
+              'Wallet tidak valid. Alamat ini bukan wallet resmi Kelurahan yang terdaftar pada kontrak pintar.',
+            requestId: 'req-wallet-403',
+          },
+          { status: 403, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+
+    try {
+      const user = userEvent.setup()
+      renderForRole(<WalletRegistry />, 'OPERATOR_KELURAHAN', true)
+
+      // Initially verified & active MetaMask account === authorizedWallet -> Sesuai
+      await waitFor(() => {
+        expect(screen.getByText('Sesuai')).toBeInTheDocument()
+      })
+
+      // Switch MetaMask account via accountsChanged -> immediately becomes Tidak sesuai (without reload)
+      act(() => {
+        for (const fn of listeners.get('accountsChanged') ?? []) {
+          fn([strangerWallet])
+        }
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText('Tidak sesuai')).toBeInTheDocument()
+        expect(screen.getByText(/Akun MetaMask aktif bukan wallet resmi/i)).toBeInTheDocument()
+      })
+
+      // Click "Ikat wallet sesi" with stranger account -> displays specific 403 error message in role="alert"
+      await user.click(screen.getByRole('button', { name: /Ikat wallet sesi/i }))
+      const alertBox = await screen.findByRole('alert')
+      expect(alertBox).toHaveTextContent(
+        'Wallet tidak valid. Alamat ini bukan wallet resmi Kelurahan yang terdaftar pada kontrak pintar.',
+      )
+    } finally {
+      ;(window as { ethereum?: unknown }).ethereum = originalEthereum
+    }
+  })
 })

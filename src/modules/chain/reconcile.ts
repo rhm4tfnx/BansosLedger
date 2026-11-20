@@ -68,16 +68,108 @@ async function run(request: Request) {
   } finally { await Settings.updateOne({ _id, 'reconcileLease.token': token }, { $unset: { reconcileLease: 1 } }, { maxTimeMS: 3000 }) }
 }
 export async function reconcile(request: Request) { requireCron(request); return chainDeadline.run(Date.now() + 55000, () => run(request)) }
+export interface ReconciliationDiff {
+  field: string
+  label: string
+  offChain: string | null
+  onChain: string | null
+}
+
+function buildMismatchDiffs(row: {
+  txHash?: string | null
+  recordStatus?: string | null
+  recordDeletedAt?: Date | string | null
+  recordTxHash?: string | null
+  recordAmount?: number | string | null
+  recordPeriodId?: number | string | null
+  recordCommitment?: string | null
+  recordEvidenceCid?: string | null
+  eventAmount?: string | number | null
+  eventPeriodId?: string | number | null
+  eventCommitment?: string | null
+  eventEvidenceCid?: string | null
+}): ReconciliationDiff[] {
+  const diffs: ReconciliationDiff[] = []
+  const norm = (val: unknown) => (val == null ? null : String(val))
+
+  if (row.recordStatus !== 'SUCCESS' || row.recordDeletedAt != null) {
+    diffs.push({
+      field: 'status',
+      label: 'Status / Penghapusan',
+      offChain: row.recordDeletedAt != null ? `${row.recordStatus ?? '—'} (dihapus)` : norm(row.recordStatus),
+      onChain: 'SUCCESS (aktif)',
+    })
+  }
+  const offTx = norm(row.recordTxHash)
+  const onTx = norm(row.txHash)
+  if ((offTx ?? '').toLowerCase() !== (onTx ?? '').toLowerCase()) {
+    diffs.push({
+      field: 'txHash',
+      label: 'TxHash',
+      offChain: offTx,
+      onChain: onTx,
+    })
+  }
+  const offAmount = norm(row.recordAmount)
+  const onAmount = norm(row.eventAmount)
+  if (offAmount !== onAmount) {
+    diffs.push({
+      field: 'amount',
+      label: 'Nominal bantuan',
+      offChain: offAmount,
+      onChain: onAmount,
+    })
+  }
+  const offPeriod = norm(row.recordPeriodId)
+  const onPeriod = norm(row.eventPeriodId)
+  if (offPeriod !== onPeriod) {
+    diffs.push({
+      field: 'periodId',
+      label: 'Periode',
+      offChain: offPeriod,
+      onChain: onPeriod,
+    })
+  }
+  const offCommit = norm(row.recordCommitment)
+  const onCommit = norm(row.eventCommitment)
+  if ((offCommit ?? '').toLowerCase() !== (onCommit ?? '').toLowerCase()) {
+    diffs.push({
+      field: 'commitment',
+      label: 'Commitment penerima',
+      offChain: offCommit,
+      onChain: onCommit,
+    })
+  }
+  const offCid = norm(row.recordEvidenceCid)
+  const onCid = norm(row.eventEvidenceCid)
+  if (offCid !== onCid) {
+    diffs.push({
+      field: 'evidenceCid',
+      label: 'CID bukti IPFS',
+      offChain: offCid,
+      onChain: onCid,
+    })
+  }
+  return diffs
+}
+
 export async function report(ctx: DomainContext) {
   await connectDatabase()
   const config = chainConfig(), paging = pageQuery(ctx.request), state = await Settings.findById(await settingsId()).lean()
   const chainMatch = { chainId: config.chainId, contractAddress: config.address, name: 'DisbursementRecorded' }
   const dbMatch = { status: 'SUCCESS', deletedAt: null }
-  const [db, chain, missing, orphaned] = await Promise.all([
+  const [db, chain, missing, rawOrphaned] = await Promise.all([
     Disbursements.aggregate([{ $match: dbMatch }, { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: { $toDecimal: '$amount' } } } }]).option({ maxTimeMS: 5000 }),
     ChainEvents.aggregate([{ $match: chainMatch }, { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: { $convert: { input: '$args.amount', to: 'decimal', onError: 0, onNull: 0 } } } } }]).option({ maxTimeMS: 5000 }),
     Disbursements.aggregate([{ $match: { ...dbMatch, 'chain.blockNumber': { $lte: state?.lastIndexedBlock ?? -1 } } }, { $lookup: { from: 'chain_events', let: { hash: '$chain.txHash', ref: '$refId' }, pipeline: [{ $match: { ...chainMatch, $expr: { $and: [{ $eq: ['$txHash', '$$hash'] }, { $eq: ['$args.refId', '$$ref'] }] } } }], as: 'events' } }, { $match: { $expr: { $ne: [{ $size: '$events' }, 1] } } }, { $sort: { _id: 1 } }, { $skip: paging.skip }, { $limit: paging.limit }, { $project: { _id: 0, refId: 1, txHash: '$chain.txHash', code: { $literal: 'DB_SUCCESS_WITHOUT_EVENT' } } }]).option({ maxTimeMS: 5000 }),
-    ChainEvents.aggregate([{ $match: chainMatch }, { $lookup: { from: 'disbursements', localField: 'args.refId', foreignField: 'refId', as: 'records' } }, { $set: { record: { $arrayElemAt: ['$records', 0] } } }, { $match: { $expr: { $or: [{ $ne: [{ $ifNull: ['$record.status', ''] }, 'SUCCESS'] }, { $ne: [{ $ifNull: ['$record.deletedAt', null] }, null] }, { $ne: ['$record.chain.txHash', '$txHash'] }, { $ne: [{ $toString: '$record.amount' }, '$args.amount'] }, { $ne: [{ $toString: '$record.periodId' }, '$args.periodId'] }, { $ne: ['$record.commitment', '$args.recipientCommitment'] }, { $ne: [{ $arrayElemAt: ['$record.evidence.cid', 0] }, '$args.evidenceCid'] }] } } }, { $sort: { blockNumber: 1, logIndex: 1 } }, { $skip: paging.skip }, { $limit: paging.limit }, { $project: { _id: 0, txHash: 1, refId: '$args.refId', code: { $cond: [{ $eq: ['$record.status', 'SUCCESS'] }, 'MISMATCH', 'EVENT_WITHOUT_DB_SUCCESS'] } } }]).option({ maxTimeMS: 5000 }),
+    ChainEvents.aggregate([{ $match: chainMatch }, { $lookup: { from: 'disbursements', localField: 'args.refId', foreignField: 'refId', as: 'records' } }, { $set: { record: { $arrayElemAt: ['$records', 0] } } }, { $match: { $expr: { $or: [{ $ne: [{ $ifNull: ['$record.status', ''] }, 'SUCCESS'] }, { $ne: [{ $ifNull: ['$record.deletedAt', null] }, null] }, { $ne: ['$record.chain.txHash', '$txHash'] }, { $ne: [{ $toString: '$record.amount' }, '$args.amount'] }, { $ne: [{ $toString: '$record.periodId' }, '$args.periodId'] }, { $ne: ['$record.commitment', '$args.recipientCommitment'] }, { $ne: [{ $arrayElemAt: ['$record.evidence.cid', 0] }, '$args.evidenceCid'] }] } } }, { $sort: { blockNumber: 1, logIndex: 1 } }, { $skip: paging.skip }, { $limit: paging.limit }, { $project: { _id: 0, txHash: 1, refId: '$args.refId', code: { $cond: [{ $eq: ['$record.status', 'SUCCESS'] }, 'MISMATCH', 'EVENT_WITHOUT_DB_SUCCESS'] }, recordStatus: '$record.status', recordDeletedAt: '$record.deletedAt', recordTxHash: '$record.chain.txHash', recordAmount: '$record.amount', recordPeriodId: '$record.periodId', recordCommitment: '$record.commitment', recordEvidenceCid: { $arrayElemAt: ['$record.evidence.cid', 0] }, eventAmount: '$args.amount', eventPeriodId: '$args.periodId', eventCommitment: '$args.recipientCommitment', eventEvidenceCid: '$args.evidenceCid' } }]).option({ maxTimeMS: 5000 }),
   ])
+  const orphaned = rawOrphaned.map((item) => {
+    const base = { txHash: item.txHash, refId: item.refId, code: item.code }
+    if (item.code === 'MISMATCH') {
+      return { ...base, diffs: buildMismatchDiffs(item) }
+    }
+    return base
+  })
   return json(toReconciliationDto({ db: { count: db[0]?.count ?? 0, amount: db[0]?.amount?.toString() ?? '0' }, chain: { count: chain[0]?.count ?? 0, amount: chain[0]?.amount?.toString() ?? '0' }, indexedThrough: state?.lastIndexedBlock ?? -1, anomalies: { missingEvents: missing, inconsistentEvents: orphaned, page: paging.page, limitPerCategory: paging.limit } }))
 }

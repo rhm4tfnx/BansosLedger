@@ -33,6 +33,24 @@
 .red {
   color: #b42318;
 }
+.noticeError,
+.noticeSuccess {
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.noticeError {
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  color: #b42318;
+}
+.noticeSuccess {
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+  color: #027a48;
+}
 .select {
   width: 100%;
   margin: 12px 0 20px;

@@ -54,9 +54,16 @@ export interface FormattedApiError {
   fullMessage: string
 }
 
+const SERVER_DETAIL_PRIORITY_CODES = new Set([
+  'WALLET_UNAUTHORIZED',
+  'WALLET_CHAIN_MISMATCH',
+])
+
 export function formatApiError(error: unknown): FormattedApiError {
   if (error instanceof ApiClientError) {
-    const message = mapApiErrorCode(error.code)
+    const preferServerDetail =
+      SERVER_DETAIL_PRIORITY_CODES.has(error.code) && Boolean(error.detail?.trim())
+    const message = preferServerDetail ? error.detail : mapApiErrorCode(error.code)
     const fullMessage = error.requestId ? `${message} (${error.requestId})` : message
     return {
       status: error.status,

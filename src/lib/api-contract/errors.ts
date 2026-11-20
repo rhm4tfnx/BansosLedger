@@ -26,6 +26,14 @@ export const ERROR_CATALOG = {
   TOTP_INVALID: { status: 401, message: 'Kode verifikasi tidak valid.' },
   TOTP_REQUIRED: { status: 401, message: 'Verifikasi TOTP diperlukan.' },
   WALLET_NOT_VERIFIED: { status: 403, message: 'Wallet belum diverifikasi.' },
+  WALLET_UNAUTHORIZED: {
+    status: 403,
+    message: 'Wallet tidak valid. Alamat ini bukan wallet resmi Kelurahan yang terdaftar pada kontrak pintar.',
+  },
+  WALLET_CHAIN_MISMATCH: {
+    status: 400,
+    message: 'Jaringan wallet tidak sesuai. Pindah ke jaringan Hyperledger Besu (Chain ID 250204).',
+  },
   INVALID_DATE_RANGE: { status: 400, message: 'Rentang tanggal tidak valid.' },
 
   // Recipients

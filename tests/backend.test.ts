@@ -203,7 +203,18 @@ test('reconciliation flags missing events, orphan events and CID mismatch', asyn
     await Disbursements.create({ refId, recipientId: recipient._id, programId: program._id, periodId: 202601, amount: 300000, status: 'SUCCESS', chain: { txHash, blockNumber: 10 }, evidence: [{ cid: 'expected' }] })
     const response = await report(ctx('', {}, 'GET')); expect((await response.json()).anomalies.missingEvents).toHaveLength(1)
     await ChainEvents.create({ txHash, logIndex: 0, name: 'DisbursementRecorded', chainId: 1337, contractAddress: contract, blockNumber: 10, args: { refId, amount: '300000', evidenceCid: 'different' } })
-    const mismatch = await (await report(ctx('', {}, 'GET'))).json(); expect(mismatch.anomalies.inconsistentEvents[0].code).toBe('MISMATCH')
+    const mismatch = await (await report(ctx('', {}, 'GET'))).json()
+    expect(mismatch.anomalies.inconsistentEvents[0].code).toBe('MISMATCH')
+    expect(mismatch.anomalies.inconsistentEvents[0].diffs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'evidenceCid',
+          label: 'CID bukti IPFS',
+          offChain: 'expected',
+          onChain: 'different',
+        }),
+      ]),
+    )
     await Disbursements.updateOne({ refId }, { $set: { status: 'FAILED' } })
     expect((await (await report(ctx('', {}, 'GET'))).json()).anomalies.inconsistentEvents[0].code).toBe('EVENT_WITHOUT_DB_SUCCESS')
   } finally { vi.unstubAllEnvs() }
@@ -261,5 +272,53 @@ test.each(['OPERATOR', 'KECAMATAN', 'DINAS_SOSIAL', 'anonymous'] as const)('ever
   if (role === 'KECAMATAN' || role === 'DINAS_SOSIAL') {
     expect((await nonce(request())).status).toBe(403); expect((await bind(request())).status).toBe(403)
     expect((await requireV1('wallet:read')).response).toBeNull()
+  }
+})
+
+test('wallet nonce and bind return specific 403 WALLET_UNAUTHORIZED and 400 WALLET_CHAIN_MISMATCH errors', async () => {
+  vi.stubEnv('NEXT_PUBLIC_CHAIN_ID', '250204')
+  const expectedWalletMod = await import('@/lib/auth/expected-wallet')
+  const authorizedAddr = Wallet.createRandom().address
+  const unauthorizedAddr = Wallet.createRandom().address
+  vi.spyOn(expectedWalletMod, 'expectedWallet').mockResolvedValue(authorizedAddr)
+  try {
+    await signedIn('OPERATOR')
+
+    // 1. Unauthorized wallet on nonce -> 403 WALLET_UNAUTHORIZED
+    const unauthNonceRes = await nonce(
+      request({ address: unauthorizedAddr, chainId: '0x3d15c' }, 'POST', '/api/v1/auth/wallet/nonce'),
+    )
+    expect(unauthNonceRes.status).toBe(403)
+    const unauthNonceBody = await unauthNonceRes.json()
+    expect(unauthNonceBody.code).toBe('WALLET_UNAUTHORIZED')
+    expect(unauthNonceBody.message).toBe(
+      'Wallet tidak valid. Alamat ini bukan wallet resmi Kelurahan yang terdaftar pada kontrak pintar.',
+    )
+
+    // 2. Wrong chainId on nonce -> 400 WALLET_CHAIN_MISMATCH
+    const wrongChainRes = await nonce(
+      request({ address: authorizedAddr, chainId: '0x1' }, 'POST', '/api/v1/auth/wallet/nonce'),
+    )
+    expect(wrongChainRes.status).toBe(400)
+    const wrongChainBody = await wrongChainRes.json()
+    expect(wrongChainBody.code).toBe('WALLET_CHAIN_MISMATCH')
+    expect(wrongChainBody.message).toContain('250204')
+
+    // 3. Unauthorized wallet on bind -> 403 WALLET_UNAUTHORIZED
+    const unauthBindRes = await bind(
+      request(
+        { address: unauthorizedAddr, chainId: '0x3d15c', signature: '0x' + '1'.repeat(130) },
+        'POST',
+        '/api/v1/auth/wallet/bind',
+      ),
+    )
+    expect(unauthBindRes.status).toBe(403)
+    const unauthBindBody = await unauthBindRes.json()
+    expect(unauthBindBody.code).toBe('WALLET_UNAUTHORIZED')
+    expect(unauthBindBody.message).toBe(
+      'Wallet tidak valid. Alamat ini bukan wallet resmi Kelurahan yang terdaftar pada kontrak pintar.',
+    )
+  } finally {
+    vi.unstubAllEnvs()
   }
 })

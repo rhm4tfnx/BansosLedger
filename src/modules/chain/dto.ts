@@ -25,6 +25,16 @@ export function toNetworkStatusDto(data: any): NetworkStatusDto {
   return networkStatusDtoSchema.parse(dto)
 }
 
+function mapDiffs(diffs: unknown) {
+  if (!Array.isArray(diffs) || diffs.length === 0) return undefined
+  return diffs.map((d: any) => ({
+    field: String(d.field ?? ''),
+    label: String(d.label ?? d.field ?? ''),
+    offChain: d.offChain != null ? String(d.offChain) : null,
+    onChain: d.onChain != null ? String(d.onChain) : null,
+  }))
+}
+
 export function toReconciliationDto(data: any): ReconciliationDto {
   const dto = {
     db: {
@@ -38,18 +48,26 @@ export function toReconciliationDto(data: any): ReconciliationDto {
     indexedThrough: Number(data.indexedThrough ?? -1),
     anomalies: {
       missingEvents: Array.isArray(data.anomalies?.missingEvents)
-        ? data.anomalies.missingEvents.map((e: any) => ({
-            refId: String(e.refId ?? ''),
-            txHash: e.txHash ? String(e.txHash) : null,
-            code: String(e.code ?? ''),
-          }))
+        ? data.anomalies.missingEvents.map((e: any) => {
+            const diffs = mapDiffs(e.diffs)
+            return {
+              refId: String(e.refId ?? ''),
+              txHash: e.txHash ? String(e.txHash) : null,
+              code: String(e.code ?? ''),
+              ...(diffs ? { diffs } : {}),
+            }
+          })
         : [],
       inconsistentEvents: Array.isArray(data.anomalies?.inconsistentEvents)
-        ? data.anomalies.inconsistentEvents.map((e: any) => ({
-            refId: String(e.refId ?? ''),
-            txHash: String(e.txHash ?? ''),
-            code: String(e.code ?? ''),
-          }))
+        ? data.anomalies.inconsistentEvents.map((e: any) => {
+            const diffs = mapDiffs(e.diffs)
+            return {
+              refId: String(e.refId ?? ''),
+              txHash: String(e.txHash ?? ''),
+              code: String(e.code ?? ''),
+              ...(diffs ? { diffs } : {}),
+            }
+          })
         : [],
       page: Number(data.anomalies?.page ?? 1),
       limitPerCategory: Number(data.anomalies?.limitPerCategory ?? 20),
