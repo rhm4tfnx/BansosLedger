@@ -73,6 +73,16 @@ export function LoginPanel() {
       })
       setPassword('')
       await sessionQuery.refetch()
+      if (data.role === 'OPERATOR_KELURAHAN') {
+        // Keep the operator on /login so the wallet verification step stays visible.
+        setTab('wallet')
+        setNotice({
+          tone: 'success',
+          message:
+            'Sesi Operator Kelurahan aktif. Lanjutkan verifikasi wallet atau langsung masuk ke dashboard.',
+        })
+        return
+      }
       router.push(data.redirectTo || dashboardDestination())
       router.refresh()
     } catch (error) {

@@ -84,7 +84,7 @@ function renderLoginPanel() {
 }
 
 describe('<LoginPanel>', () => {
-  it('redirects OPERATOR_KELURAHAN directly to /dashboard after successful credential login', async () => {
+  it('keeps OPERATOR_KELURAHAN on /login, auto-switches to tab 02 with a top success alert, wallet options and "Masuk ke Dashboard"', async () => {
     const user = userEvent.setup()
     let authenticated = false
 
@@ -124,11 +124,92 @@ describe('<LoginPanel>', () => {
     await user.type(screen.getByLabelText('Kata sandi'), 'KataSandiValid123!')
     await user.click(screen.getByRole('button', { name: /masuk ke dashboard/i }))
 
-    await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith('/dashboard')
-      expect(refreshMock).toHaveBeenCalledTimes(1)
-    })
+    // Auto-switched to tab 02 without redirecting
+    expect(
+      await screen.findByRole('heading', { name: 'Verifikasi kepemilikan wallet' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /02 \/ verifikasi wallet/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(pushMock).not.toHaveBeenCalled()
+    expect(refreshMock).not.toHaveBeenCalled()
+
+    // Green success alert at the top, before the Jaringan Besu panel
+    const successStatus = screen.getByRole('status')
+    expect(successStatus).toHaveTextContent(
+      'Sesi Operator Kelurahan aktif. Lanjutkan verifikasi wallet atau langsung masuk ke dashboard.',
+    )
+    expect(successStatus.className).toContain('bg-primary/5')
+    expect(
+      successStatus.compareDocumentPosition(screen.getByText('Jaringan Besu')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+
+    // Wallet verification options and a single "Masuk ke Dashboard" button are available
+    expect(screen.getByRole('button', { name: /connect metamask/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /hubungkan wallet terlebih dahulu|tanda tangani nonce server/i }),
+    ).toBeInTheDocument()
+    const dashboardButtons = screen.getAllByRole('button', { name: /masuk ke dashboard/i })
+    expect(dashboardButtons).toHaveLength(1)
+
+    await user.click(dashboardButtons[0])
+    expect(pushMock).toHaveBeenCalledWith('/dashboard')
+    expect(refreshMock).toHaveBeenCalledTimes(1)
   })
+
+  it.each(['KECAMATAN', 'DINAS_SOSIAL'] as const)(
+    'redirects %s directly to /dashboard after successful credential login',
+    async (role) => {
+      const user = userEvent.setup()
+      let authenticated = false
+
+      server.use(
+        http.get('http://localhost:3000/api/v1/auth/me', () => {
+          if (!authenticated) {
+            return HttpResponse.json(
+              {
+                type: 'https://bansosledger.local/problems/AUTH_REQUIRED',
+                title: 'Autentikasi diperlukan',
+                status: 401,
+                detail: 'Sesi tidak ditemukan.',
+                code: 'AUTH_REQUIRED',
+                requestId: 'req-me-unauth',
+              },
+              { status: 401, headers: { 'content-type': 'application/problem+json' } },
+            )
+          }
+          return HttpResponse.json({ ...operatorMeDto, id: 'usr-2', role })
+        }),
+        http.post('http://localhost:3000/api/v1/auth/login', () => {
+          authenticated = true
+          return HttpResponse.json({
+            authenticated: true,
+            userId: 'usr-2',
+            role,
+            walletVerificationRequired: false,
+            redirectTo: '/dashboard',
+            mustChangePassword: false,
+          })
+        }),
+      )
+
+      renderLoginPanel()
+
+      await user.type(await screen.findByLabelText('Email'), 'pengguna@barru.go.id')
+      await user.type(screen.getByLabelText('Kata sandi'), 'KataSandiValid123!')
+      await user.click(screen.getByRole('button', { name: /masuk ke dashboard/i }))
+
+      await waitFor(() => {
+        expect(pushMock).toHaveBeenCalledWith('/dashboard')
+        expect(refreshMock).toHaveBeenCalledTimes(1)
+      })
+      expect(
+        screen.queryByRole('heading', { name: 'Verifikasi kepemilikan wallet' }),
+      ).not.toBeInTheDocument()
+    },
+  )
 
   it('shows only one "Masuk ke Dashboard" button plus secondary "Verifikasi Wallet" on tab 01, and moves "Masuk ke Dashboard" into tab 02', async () => {
     const user = userEvent.setup()
