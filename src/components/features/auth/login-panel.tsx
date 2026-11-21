@@ -5,16 +5,18 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { FormEvent } from 'react'
 import { hasPermission } from '@/lib/rbac'
-import { formatApiError } from '@/lib/api/errors'
+import { ApiClientError, formatApiError } from '@/lib/api/errors'
 import {
   useLoginMutation,
   useSession,
   useWalletBindMutation,
   useWalletNonceMutation,
 } from '@/lib/api/hooks/auth'
-import { getExpectedChainId, toHexChainId, useWallet } from '@/lib/wallet'
+import { formatWalletError, getExpectedChainId, toHexChainId, useWallet } from '@/lib/wallet'
 import {
+  AlertCircle,
   ArrowRight,
+  CheckCircle2,
   Eye,
   EyeOff,
   LockKeyhole,
@@ -24,6 +26,11 @@ import {
   FileSignature,
   ArrowUpRight,
 } from 'lucide-react'
+
+type NoticeState = {
+  tone: 'error' | 'success'
+  message: string
+} | null
 
 const subscribe = () => () => {}
 const clientSnapshot = () => true
@@ -37,7 +44,7 @@ export function LoginPanel() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState<NoticeState>(null)
 
   const sessionQuery = useSession()
   const loginMutation = useLoginMutation()
@@ -57,7 +64,7 @@ export function LoginPanel() {
   async function handleCredentialSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (isSubmitting) return
-    setNotice('')
+    setNotice(null)
     try {
       const data = await loginMutation.mutateAsync({
         email,
@@ -66,26 +73,20 @@ export function LoginPanel() {
       })
       setPassword('')
       await sessionQuery.refetch()
-      if (data.role === 'OPERATOR_KELURAHAN') {
-        setNotice(
-          'Sesi Operator Kelurahan aktif. Masuk ke dashboard atau lanjutkan verifikasi wallet.',
-        )
-      } else {
-        router.push(data.redirectTo || dashboardDestination())
-        router.refresh()
-      }
+      router.push(data.redirectTo || dashboardDestination())
+      router.refresh()
     } catch (error) {
-      setNotice(formatApiError(error).message)
+      setNotice({ tone: 'error', message: formatApiError(error).message })
     }
   }
 
   async function verifyWallet() {
     if (!canVerifyWallet || verifying) return
-    setNotice('')
+    setNotice(null)
     try {
       const connectedAddress = wallet.address ?? (await wallet.connect())
       if (!connectedAddress) {
-        setNotice('Hubungkan wallet terlebih dahulu.')
+        setNotice({ tone: 'error', message: 'Hubungkan wallet terlebih dahulu.' })
         return
       }
       const numericChainId = wallet.chainId ?? getExpectedChainId() ?? 1337
@@ -102,9 +103,18 @@ export function LoginPanel() {
         signature,
       })
       await sessionQuery.refetch()
-      setNotice('Kepemilikan wallet telah diverifikasi server. Sesi diperbarui.')
+      setNotice({
+        tone: 'success',
+        message: 'Kepemilikan wallet telah diverifikasi server. Sesi diperbarui.',
+      })
     } catch (error) {
-      setNotice(formatApiError(error).message)
+      setNotice({
+        tone: 'error',
+        message:
+          error instanceof ApiClientError
+            ? formatApiError(error).message
+            : formatWalletError(error),
+      })
     }
   }
 
@@ -112,6 +122,25 @@ export function LoginPanel() {
     'flex min-h-12 w-full items-center justify-center gap-3 rounded-control bg-primary px-4 text-sm font-semibold text-white transition-colors hover:bg-primary-hover'
 
   const wrongNetwork = wallet.status === 'wrong-chain'
+
+  const noticeBanner = notice ? (
+    <div
+      role={notice.tone === 'error' ? 'alert' : 'status'}
+      aria-live={notice.tone === 'error' ? 'assertive' : 'polite'}
+      className={
+        notice.tone === 'error'
+          ? 'mb-5 flex items-start gap-2.5 rounded-control border border-red-200 border-l-2 border-l-red-600 bg-red-50/80 p-3 text-xs leading-5 text-red-950'
+          : 'mb-5 flex items-start gap-2.5 rounded-control border border-primary/25 border-l-2 border-l-primary bg-primary/5 p-3 text-xs leading-5 text-primary'
+      }
+    >
+      {notice.tone === 'error' ? (
+        <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-700" aria-hidden="true" />
+      ) : (
+        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+      )}
+      <p className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">{notice.message}</p>
+    </div>
+  ) : null
 
   return (
     <section aria-label="Login pengelola" className="border bg-surface">
@@ -134,7 +163,7 @@ export function LoginPanel() {
             aria-pressed={tab === id}
             onClick={() => {
               setTab(id)
-              setNotice('')
+              setNotice(null)
             }}
             className={`flex min-h-16 items-center justify-center gap-2 border-b-2 px-3 font-mono text-xs transition-colors first:border-r ${tab === id ? 'border-b-primary bg-primary/5 text-primary' : 'border-b-transparent text-body-copy hover:bg-background'}`}
           >
@@ -147,9 +176,10 @@ export function LoginPanel() {
         {tab === 'account' ? (
           <>
             <h2 className="text-xl font-semibold">Masuk ke akun Anda</h2>
-            <p className="mb-7 mt-2 text-sm leading-6 text-body-copy">
+            <p className="mb-5 mt-2 text-sm leading-6 text-body-copy">
               Gunakan kredensial yang diberikan administrator.
             </p>
+            {noticeBanner}
             {hydrated ? (
               <form onSubmit={(e) => void handleCredentialSubmit(e)} className="space-y-5">
                 <div>
@@ -205,6 +235,19 @@ export function LoginPanel() {
                 <span className="sr-only">Memuat formulir login</span>
               </div>
             )}
+            {canVerifyWallet && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTab('wallet')
+                  setNotice(null)
+                }}
+                className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-control border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
+              >
+                <Wallet size={16} className="text-primary" />
+                Verifikasi Wallet
+              </button>
+            )}
             <p className="mt-4 text-xs leading-5 text-body-copy">
               Lupa kata sandi? Hubungi administrator instansi untuk pemulihan akun.
             </p>
@@ -212,10 +255,11 @@ export function LoginPanel() {
         ) : (
           <>
             <h2 className="text-xl font-semibold">Verifikasi kepemilikan wallet</h2>
-            <p className="mt-2 text-sm leading-6 text-body-copy">
+            <p className="mb-5 mt-2 text-sm leading-6 text-body-copy">
               Setelah akun terverifikasi, hubungkan wallet yang terdaftar untuk role Anda.
             </p>
-            <div className="my-6 flex items-center justify-between gap-3 border bg-background/50 px-4 py-3">
+            {noticeBanner}
+            <div className="mb-6 flex items-center justify-between gap-3 border bg-background/50 px-4 py-3">
               <div className="flex items-center gap-2 text-sm">
                 <Network size={17} className="text-primary" />
                 Jaringan Besu
@@ -233,7 +277,10 @@ export function LoginPanel() {
               disabled={!canVerifyWallet || verifying}
               className={buttonClass}
               onClick={() => {
-                void wallet.connect().catch(() => {})
+                setNotice(null)
+                void wallet.connect().catch((error) => {
+                  setNotice({ tone: 'error', message: formatWalletError(error) })
+                })
               }}
             >
               <Wallet size={18} />
@@ -271,7 +318,10 @@ export function LoginPanel() {
                 <button
                   type="button"
                   onClick={() => {
-                    void wallet.ensureChain().catch(() => {})
+                    setNotice(null)
+                    void wallet.ensureChain().catch((error) => {
+                      setNotice({ tone: 'error', message: formatWalletError(error) })
+                    })
                   }}
                   className={buttonClass}
                 >
@@ -280,28 +330,20 @@ export function LoginPanel() {
                 </button>
               </div>
             )}
+            {canVerifyWallet && (
+              <button
+                type="button"
+                className={`mt-5 ${buttonClass}`}
+                onClick={() => {
+                  router.push(dashboardDestination())
+                  router.refresh()
+                }}
+              >
+                Masuk ke Dashboard
+                <ArrowRight size={17} />
+              </button>
+            )}
           </>
-        )}
-        {canVerifyWallet && (
-          <div className="mt-5 flex flex-wrap gap-3">
-            <button
-              type="button"
-              className={buttonClass}
-              onClick={() => {
-                router.push(dashboardDestination())
-                router.refresh()
-              }}
-            >
-              Masuk ke Dashboard
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('wallet')}
-              className="text-sm text-primary underline"
-            >
-              Lanjut verifikasi wallet
-            </button>
-          </div>
         )}
         {process.env.NODE_ENV !== 'production' && tab === 'account' && (
           <div className="mt-5 space-y-2 border p-3 text-xs">
@@ -325,16 +367,6 @@ export function LoginPanel() {
             ))}
           </div>
         )}
-        <p
-          role="status"
-          className={
-            notice
-              ? 'mt-5 border-l-2 border-primary bg-background p-3 text-xs leading-5 text-body-copy'
-              : 'sr-only'
-          }
-        >
-          {notice}
-        </p>
         <div className="mt-7 flex gap-3 border-t pt-5">
           <ShieldCheck size={20} className="shrink-0 text-primary" />
           <div>
