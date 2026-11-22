@@ -1221,7 +1221,7 @@ function ProgramChainActionDialog({
 
         {phase === 'summary' && (
           <div className={s.full}>
-            <WalletGate>
+            <WalletGate enableNetworkQuery>
               <button
                 type="button"
                 className={s.primary}

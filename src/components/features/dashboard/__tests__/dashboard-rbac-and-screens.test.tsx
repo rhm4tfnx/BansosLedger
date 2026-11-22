@@ -485,6 +485,86 @@ describe('Role-based action visibility & Part B read-only screens', () => {
     })
   })
 
+  it.each([
+    {
+      status: 'Berhenti' as const,
+      role: 'alert',
+      text: /produksi blok hyperledger besu sedang berhenti/i,
+    },
+    {
+      status: 'Terganggu' as const,
+      role: 'status',
+      text: /mengalami keterlambatan blok/i,
+    },
+  ])('DashboardShell shows a $status network banner and status dot', async ({ status, role, text }) => {
+    server.use(
+      http.get('*/api/v1/network/status', () =>
+        HttpResponse.json({
+          status,
+          latestBlock: 120,
+          timestamp: 1762240000,
+          ageSeconds: status === 'Berhenti' ? 300 : 30,
+          validatorCount: 4,
+          validators: [],
+        }),
+      ),
+    )
+
+    renderForRole(
+      <DashboardShell initialRole="OPERATOR_KELURAHAN" walletVerified={false}>
+        <div>Konten dashboard</div>
+      </DashboardShell>,
+      'OPERATOR_KELURAHAN',
+    )
+
+    const banner = await screen.findByText(text)
+    const container = banner.closest(`[role="${role}"]`)
+    expect(container).not.toBeNull()
+    expect(container).toHaveAttribute('aria-live', role === 'alert' ? 'assertive' : 'polite')
+
+    // Banner sits above the page content
+    const content = screen.getByText('Konten dashboard')
+    expect(
+      (container as Element).compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+
+    // Header and sidebar dots reflect the status, and the status is also written as text
+    const dots = document.querySelectorAll(`[data-network-status="${status}"]`)
+    expect(dots).toHaveLength(2)
+    expect(screen.getByTestId('header-network')).toHaveTextContent(`Besu · ${status} · 4 validator`)
+    expect(screen.getByTestId('sidebar-network-status')).toHaveTextContent(status)
+  })
+
+  it('DashboardShell shows no network banner and keeps the green dot when status is Normal', async () => {
+    server.use(
+      http.get('*/api/v1/network/status', () =>
+        HttpResponse.json({
+          status: 'Normal',
+          latestBlock: 120,
+          timestamp: 1762240000,
+          ageSeconds: 2,
+          validatorCount: 4,
+          validators: [],
+        }),
+      ),
+    )
+
+    renderForRole(
+      <DashboardShell initialRole="OPERATOR_KELURAHAN" walletVerified={false}>
+        <div>Konten dashboard</div>
+      </DashboardShell>,
+      'OPERATOR_KELURAHAN',
+    )
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('[data-network-status="Normal"]')).toHaveLength(2)
+    })
+    expect(screen.getByTestId('header-network')).toHaveTextContent('Besu · 4 validator')
+    expect(screen.queryByText(/jaringan blockchain berhenti/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/jaringan blockchain terganggu/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('sidebar-network-status')).not.toBeInTheDocument()
+  })
+
   it('Reports renders field-level Off-chain vs On-chain diffs for MISMATCH anomalies', async () => {
     server.use(
       http.get('*/api/v1/programs', () =>

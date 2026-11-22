@@ -162,6 +162,58 @@
   background: #12b76a;
   box-shadow: 0 0 0 3px #ecfdf3;
 }
+.statusDotWarning {
+  background: #f79009;
+  box-shadow: 0 0 0 3px #fffaeb;
+}
+.statusDotDanger {
+  background: #f04438;
+  box-shadow: 0 0 0 3px #fef3f2;
+}
+.networkBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 20px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.networkBanner > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.networkBanner > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.networkBanner strong {
+  display: block;
+  font-weight: 600;
+}
+.networkBanner p {
+  margin-top: 2px;
+}
+.networkBannerDanger {
+  background: #fef3f2;
+  border-color: #fecdca;
+  color: #912018;
+}
+.networkBannerDanger > svg {
+  color: #d92d20;
+}
+.networkBannerWarning {
+  background: #fffaeb;
+  border-color: #fedf89;
+  color: #93370d;
+}
+.networkBannerWarning > svg {
+  color: #dc6803;
+}
 .homeLink {
   display: flex;
   justify-content: space-between;

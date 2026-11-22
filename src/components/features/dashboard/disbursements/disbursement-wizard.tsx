@@ -962,7 +962,7 @@ export function DisbursementWizard({ onClose, initialDisbursement }: Disbursemen
               </div>
               <div className={s.card}>
                 <h3>Otorisasi Wallet Kelurahan</h3>
-                <WalletGate>
+                <WalletGate enableNetworkQuery>
                   <button
                     type="button"
                     className={s.primary}

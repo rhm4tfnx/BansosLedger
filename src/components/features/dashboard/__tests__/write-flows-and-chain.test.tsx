@@ -692,6 +692,196 @@ describe('Part C — Write flows and chain transactions', () => {
     })
   })
 
+  it('C.4 Disbursement Wizard: locks the sign button with "Jaringan blockchain sedang berhenti" when network status is Berhenti', async () => {
+    const user = userEvent.setup()
+
+    const programDto = {
+      id: '65f000000000000000000001',
+      code: 'BLT-2026',
+      programId: '0x' + '1'.repeat(64),
+      name: 'BLT Kelurahan Tahap I',
+      description: 'Bantuan langsung tunai',
+      fundSource: 'APBD Barru',
+      kind: 'TUNAI' as const,
+      amountPerRecipient: 600000,
+      totalBudget: 6000000,
+      startPeriod: 202601,
+      endPeriod: 202603,
+      status: 'ACTIVE' as const,
+      isPublic: true,
+      enrolledCount: 5,
+      registeredCount: 5,
+      disbursedCount: 0,
+      disbursedAmount: 0,
+      remainingBudget: 6000000,
+      chain: { createTxHash: MOCK_TX_HASH, blockNumber: 100 },
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    }
+    const disbursementDto = {
+      id: '65f000000000000000000099',
+      refId: '0x' + '9'.repeat(64),
+      programId: '65f000000000000000000001',
+      recipientId: '65f000000000000000000011',
+      program: { id: '65f000000000000000000001', code: 'BLT-2026', name: 'BLT Kelurahan Tahap I' },
+      recipient: { id: '65f000000000000000000011', name: 'Baharuddin', nikMasked: '7311••••••••0001' },
+      periodId: 202601,
+      commitment: '0x' + '8'.repeat(64),
+      amount: 600000,
+      disbursedDate: '2026-10-15T00:00:00.000Z',
+      note: '',
+      status: 'DRAFT' as const,
+      evidence: [],
+      chain: null,
+      attempts: [],
+      lastError: null,
+      createdAt: '2026-10-15T03:00:00.000Z',
+      updatedAt: '2026-10-15T03:00:00.000Z',
+    }
+    let txIntentCalls = 0
+
+    server.use(
+      http.get('*/api/v1/auth/me', () =>
+        HttpResponse.json({
+          id: 'u-1',
+          name: 'Operator Takkalasi',
+          institution: 'Kelurahan Takkalasi',
+          email: 'operator@barru.go.id',
+          role: 'OPERATOR',
+          mustChangePassword: false,
+          walletVerified: true,
+          boundWalletAddress: MOCK_WALLET_ADDRESS,
+          expiresAt: 1790000000000,
+        }),
+      ),
+      http.get('*/api/v1/network/status', () =>
+        HttpResponse.json({
+          status: 'Berhenti',
+          latestBlock: 120,
+          timestamp: 1762240000,
+          ageSeconds: 300,
+          validatorCount: 4,
+          validators: [],
+        }),
+      ),
+      http.get('*/api/v1/programs', () =>
+        HttpResponse.json({ data: [programDto], total: 1, page: 1, limit: 100, totalPages: 1 }),
+      ),
+      http.get('*/api/v1/programs/65f000000000000000000001/enrollments', () =>
+        HttpResponse.json({
+          data: [
+            {
+              id: '65f000000000000000000055',
+              recipient: { id: '65f000000000000000000011', name: 'Baharuddin', nikMasked: '7311••••••••0001' },
+              status: 'REGISTERED_ONCHAIN',
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+        }),
+      ),
+      http.post('*/api/v1/disbursements/preflight', () =>
+        HttpResponse.json({
+          ok: true,
+          checks: [
+            { key: 'program_active', label: 'Program aktif', ok: true },
+            { key: 'period_in_range', label: 'Periode dalam rentang program', ok: true },
+            { key: 'recipient_registered', label: 'Penerima terdaftar on-chain', ok: true },
+            { key: 'no_duplicate', label: 'Duplikasi periode', ok: true },
+            { key: 'amount_matches_program', label: 'Kesesuaian nominal', ok: true },
+            { key: 'recipient_final_commitment', label: 'Status FINAL & commitment penerima', ok: true },
+            { key: 'authorized_wallet', label: 'Kewenangan wallet Kelurahan', ok: true },
+          ],
+        }),
+      ),
+      http.post('*/api/v1/disbursements', () =>
+        HttpResponse.json(
+          {
+            ...disbursementDto,
+            preview: {
+              refId: disbursementDto.refId,
+              programId: programDto.programId,
+              periodId: 202601,
+              commitment: disbursementDto.commitment,
+              amount: 600000,
+            },
+          },
+          { status: 201 },
+        ),
+      ),
+      http.post('*/api/v1/disbursements/65f000000000000000000099/evidence', () =>
+        HttpResponse.json(
+          {
+            data: [
+              {
+                cid: 'bafkreigh2akiscaildcqabsyg3dfr6chu3fgpregiymsck7e7aqa4s52zy',
+                name: 'bukti.jpg',
+                mime: 'image/jpeg',
+                size: 1024,
+                sha256: 'a'.repeat(64),
+                access: 'PUBLIC',
+                status: 'ACTIVE',
+                withdrawnAt: null,
+                withdrawReason: null,
+              },
+            ],
+          },
+          { status: 201 },
+        ),
+      ),
+      http.post('*/api/v1/disbursements/65f000000000000000000099/tx-intent', () => {
+        txIntentCalls += 1
+        return HttpResponse.json({ to: '0x2222222222222222222222222222222222222222', data: '0x', chainId: 1337 })
+      }),
+    )
+
+    renderWithProviders(<DisbursementWizard onClose={vi.fn()} />, 'OPERATOR_KELURAHAN', true)
+
+    await waitFor(() => {
+      expect(screen.getByText('BLT Kelurahan Tahap I')).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: /lanjut ke langkah 2/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Baharuddin')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Baharuddin'))
+    await user.click(screen.getByRole('button', { name: /lanjut ke langkah 3/i }))
+    await user.click(screen.getByRole('button', { name: /lanjut ke langkah 4/i }))
+    await waitFor(() => {
+      expect(screen.getByText(/7\/7 aturan lolos/i)).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: /lanjut ke langkah 5/i }))
+
+    await user.click(screen.getByRole('button', { name: /simpan data draft/i }))
+    const jpegFile = new File(
+      [new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46])],
+      'bukti.jpg',
+      { type: 'image/jpeg' },
+    )
+    await user.upload(await screen.findByLabelText(/pilih berkas bukti/i), jpegFile)
+    await waitFor(() => {
+      expect(screen.getAllByText(/bukti\.jpg/i).length).toBeGreaterThan(0)
+    })
+    for (const cb of screen.getAllByRole('checkbox')) {
+      await user.click(cb)
+    }
+    await user.click(screen.getByRole('button', { name: /unggah bukti ke ipfs/i }))
+    await waitFor(() => {
+      expect(screen.getByText(/1 berkas bukti berhasil diunggah/i)).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: /lanjut ke langkah 6/i }))
+
+    // Step 6: WalletGate fetches network status itself and blocks signing
+    expect(screen.getByText(/konfirmasi ringkasan & tanda tangan wallet/i)).toBeInTheDocument()
+    expect(await screen.findByText('Jaringan blockchain sedang berhenti')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /tanda tangani & kirim ke blockchain/i }),
+    ).not.toBeInTheDocument()
+    expect(txIntentCalls).toBe(0)
+  })
+
   it('C.5 WalletGate states: renders network stopped, unavailable, disconnected, wrong-chain, wrong-account, and ready with keyboard reachability', async () => {
     // 1. Network stopped
     const stoppedView = renderWithProviders(
